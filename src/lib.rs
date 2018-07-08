@@ -17,5 +17,9 @@ pub struct ConnectionInfo {
     pub last_report: time::SystemTime,
 }
 
+pub struct Publisher {}
+
+pub struct Subscription {}
+
 #[cfg(test)]
 mod tests {}
