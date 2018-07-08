@@ -115,7 +115,7 @@ fn handle_get_connections(req: HttpRequest<ProtectedState>) -> HttpResponse {
     HttpResponse::Ok().json(PubSubResponse::new("success", &*state))
 }
 
-fn actix_app() -> App<ProtectedState> {
+fn actix_pubsub_app() -> App<ProtectedState> {
     let state = Arc::new(RwLock::new(State::new()));
     App::<ProtectedState>::with_state(state)
         .resource("/status", move |r| {
@@ -159,7 +159,7 @@ fn main() {
     let sys = actix::System::new("example");
     let bind_info = matches.value_of("bind").unwrap();
 
-    server::new(actix_app)
+    server::new(actix_pubsub_app)
         .bind(bind_info)
         .expect("Can not bind")
         .start();
