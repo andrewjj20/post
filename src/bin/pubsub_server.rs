@@ -5,6 +5,7 @@ extern crate actix;
 extern crate env_logger;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
 extern crate clap;
 extern crate futures;
 extern crate pubsub;
@@ -86,16 +87,14 @@ fn handle_add_connection(
     req.json()
         .from_err()
         .and_then(move |publisher: PublisherDesc| {
-            let name = publisher.name.clone();
             let info = ConnectionResponse {
                 publisher: publisher,
                 info: ConnectionInfo {
-                    name: name.clone(),
                     last_report: time::SystemTime::now(),
                 },
             };
             let mut state = protected_state.write().unwrap();
-            state.insert(name, info);
+            state.insert(info.publisher.name.clone(), info);
             Ok(HttpResponse::Ok().json(PubSubResponse::status_only("success")))
         })
         .responder()
@@ -145,8 +144,8 @@ fn main() {
     env_logger::init();
 
     let matches = ClApp::new("PubSub Server")
-        .version("0.1")
-        .author("Joshua J. <jjob@joshjob.com>")
+        .version("0.1.0")
+        .author(crate_authors!("\n"))
         .arg(
             Arg::with_name("bind")
                 .short("b")

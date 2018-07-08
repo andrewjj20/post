@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate serde_derive;
 extern crate serde;
+mod framing;
 
 use std::time;
 
@@ -13,7 +14,6 @@ pub struct PublisherDesc {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ConnectionInfo {
-    pub name: String,
     pub last_report: time::SystemTime,
 }
 
