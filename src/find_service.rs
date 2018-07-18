@@ -1,29 +1,36 @@
 use super::{ConnectionInfo, PublisherDesc};
-use futures::future::{self, Future};
+use futures::future::{self, Future, FutureResult};
 use futures::prelude::*;
+use futures::stream;
 use futures::sync::oneshot::{self, Receiver, Sender};
 use futures::Async;
-use http;
+use http::{self, StatusCode};
 use hyper;
 use hyper::rt::Stream;
 use hyper::{client::HttpConnector, Body, Client, Uri};
-pub use io::Result;
+use serde;
 use serde_json;
-use std::result;
+use std::clone::Clone;
+use std::error::Error;
+use std::fmt;
+use std::marker::PhantomData;
 use std::time;
 use tokio;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlankResponse {}
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConnectionResponse {
     pub publisher: PublisherDesc,
     pub info: ConnectionInfo,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct PubSubResponse<T> {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PubSubResponse<T>
+where
+    T: Clone,
+{
     pub status: String,
     pub timestamp: time::SystemTime,
     pub response: T,
@@ -39,7 +46,12 @@ impl PubSubResponse<BlankResponse> {
     }
 }
 
-impl<T> PubSubResponse<T> {
+pub type PubSubBlankResponse = PubSubResponse<BlankResponse>;
+
+impl<T> PubSubResponse<T>
+where
+    T: Clone,
+{
     pub fn new(status: String, response: T) -> PubSubResponse<T> {
         PubSubResponse {
             status: status,
@@ -48,18 +60,47 @@ impl<T> PubSubResponse<T> {
         }
     }
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ServiceStatus {
     pub count: usize,
 }
 
 type ServiceResponse = PubSubResponse<ServiceStatus>;
 
+#[derive(Clone, Debug)]
+pub struct PubSubServerError {
+    status: StatusCode,
+    response: PubSubBlankResponse,
+}
+
+impl PubSubServerError {
+    fn new(status: StatusCode, response: PubSubBlankResponse) -> PubSubServerError {
+        PubSubServerError { status, response }
+    }
+}
+
+impl fmt::Display for PubSubServerError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}: {}", self.status, self.response.status)
+    }
+}
+
+impl Error for PubSubServerError {
+    fn description(&self) -> &str {
+        "fill this in"
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        None
+    }
+}
+
 pub enum ServerError {
     Success,
     HyperError(hyper::Error),
     SerdeError(serde_json::Error),
     UrlError(http::uri::InvalidUri),
+    PubSubServerError(PubSubServerError),
     StringError(String),
 }
 
@@ -75,77 +116,82 @@ impl From<hyper::Error> for ServerError {
     }
 }
 
-type FindClient = Client<HttpConnector, Body>;
-
-pub struct ResponseFuture<T> {
-    receiver: Receiver<result::Result<PubSubResponse<T>, ServerError>>,
-    error: ServerError,
-}
-
-impl<T> ResponseFuture<T> {
-    fn new() -> (
-        ResponseFuture<T>,
-        Sender<result::Result<PubSubResponse<T>, ServerError>>,
-    ) {
-        let (tx, rx) = oneshot::channel();
-        (
-            ResponseFuture {
-                receiver: rx,
-                error: ServerError::Success,
-            },
-            tx,
-        )
+impl From<serde_json::Error> for ServerError {
+    fn from(hyper_err: serde_json::Error) -> ServerError {
+        ServerError::SerdeError(hyper_err)
     }
 }
 
-impl<'a, T> Future for ResponseFuture<T> {
-    type Item = PubSubResponse<T>;
-    type Error = ServerError;
+impl From<PubSubServerError> for ServerError {
+    fn from(hyper_err: PubSubServerError) -> ServerError {
+        ServerError::PubSubServerError(hyper_err)
+    }
+}
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.receiver.poll() {
-            Err(_) => {
-                return Err(ServerError::StringError(String::from(
-                    "Connection abruptly closed",
-                )))
-            }
-            Ok(a) => match a {
-                Async::NotReady => Ok(Async::NotReady),
-                Async::Ready(t) => match t {
-                    Err(e) => Err(e),
-                    Ok(r) => Ok(Async::Ready(r)),
-                },
-            },
+enum RequestState {
+    Creation(FutureResult<hyper::Request<hyper::Body>, ServerError>),
+    RequestActive(hyper::client::ResponseFuture),
+    ReadingBody(StatusCode, stream::Concat2<Body>),
+}
+
+pub struct RequestFuture<T> {
+    state: RequestState,
+    response: PhantomData<T>,
+}
+
+impl<T> RequestFuture<T> {
+    fn new(req: FutureResult<hyper::Request<hyper::Body>, ServerError>) -> RequestFuture<T> {
+        RequestFuture {
+            state: RequestState::Creation(req),
+            response: PhantomData,
         }
     }
 }
 
-pub fn server_status(base_uri: Uri) -> ResponseFuture<ServiceStatus> {
-    let (ret, tx) = ResponseFuture::new();
-    tokio::spawn(
-        future::result(format!("{}/status", base_uri).parse::<Uri>())
-            .map_err(|err| ServerError::UrlError(err))
-            .and_then(|uri| {
-                let client = Client::new();
+impl<T> Future for RequestFuture<T>
+where
+    T: serde::de::DeserializeOwned + Clone,
+{
+    type Item = PubSubResponse<T>;
+    type Error = ServerError;
 
-                client
-                    .get(uri)
-                    .and_then(|res| {
-                        res.into_body()
-                            .concat2()
-                    })
-                    .map_err(|err| ServerError::HyperError(err))
-            })
-            .and_then(|body| {
-                future::result(serde_json::from_slice::<ServiceResponse>(&body))
-                    .map_err(|err| ServerError::SerdeError(err))
-            })
-            .then(|res| {
-                if let Err(_) = tx.send(res) {
-                    info!("Status request unused");
+    fn poll(&mut self) -> Result<Async<Self::Item>, Self::Error> {
+        use find_service::RequestState::{Creation, ReadingBody, RequestActive};
+        self.state = match self.state {
+            Creation(ref mut req) => RequestActive(Client::new().request(try_ready!(req.poll()))),
+            RequestActive(ref mut res_future) => {
+                let res = try_ready!(res_future.poll());
+                ReadingBody(res.status(), res.into_body().concat2())
+            }
+            ReadingBody(status, ref mut body) => {
+                let raw_body = try_ready!(body.poll());
+                let ret;
+                if (status.is_success()) {
+                    let deserialized = try!(serde_json::from_slice::<Self::Item>(&raw_body));
+                    ret = Ok(Async::Ready(deserialized));
+                } else {
+                    let deserialized =
+                        try!(serde_json::from_slice::<PubSubBlankResponse>(&raw_body));
+                    ret = Err(ServerError::PubSubServerError(PubSubServerError::new(
+                        status,
+                        deserialized,
+                    )));
                 }
-                future::ok::<(), ()>(())
-            }),
-    );
-    ret
+                return ret;
+            }
+        };
+        Ok(Async::NotReady)
+    }
+}
+
+pub fn server_status(base_uri: Uri) -> RequestFuture<ServiceStatus> {
+    let handoff = match format!("{}/status", base_uri).parse::<Uri>() {
+        Err(e) => Err(ServerError::from(e)),
+        Ok(url) => {
+            let mut req = hyper::Request::new(Body::empty());
+            Ok(req)
+        }
+    };
+
+    RequestFuture::<ServiceStatus>::new(future::result(handoff))
 }

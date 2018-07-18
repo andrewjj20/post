@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
 extern crate futures;
 extern crate http;
 extern crate hyper;
@@ -17,7 +18,7 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::time;
 use tokio::net::UdpSocket;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PublisherDesc {
     pub name: String,
     pub host_name: String,
@@ -31,7 +32,7 @@ impl<'a> ToSocketAddrs for PublisherDesc {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConnectionInfo {
     pub last_report: time::SystemTime,
 }
