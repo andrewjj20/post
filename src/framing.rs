@@ -45,7 +45,7 @@ pub enum Message {
 }
 
 impl Message {
-    pub fn parse(addr: SocketAddr, buf: &[u8], size: usize) -> Result<Message> {
+    pub fn parse(_addr: SocketAddr, _buf: &[u8], _size: usize) -> Result<Message> {
         Err(Error::new(String::from("Not Implemented")))
     }
 }

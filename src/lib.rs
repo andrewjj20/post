@@ -1,14 +1,8 @@
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate futures;
-extern crate http;
-extern crate hyper;
-extern crate serde;
-extern crate serde_json;
-extern crate tokio;
-#[macro_use]
-extern crate log;
+#![feature(rust_2018_preview)]
+
+#[macro_use] extern crate futures;
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate log;
 
 pub mod find_service;
 mod framing;

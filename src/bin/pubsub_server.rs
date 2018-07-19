@@ -1,21 +1,13 @@
-extern crate actix_web;
-#[macro_use]
-extern crate log;
-extern crate actix;
-extern crate env_logger;
-#[macro_use]
-extern crate clap;
-extern crate futures;
-extern crate pubsub;
-extern crate serde;
+#![feature(rust_2018_preview, use_extern_macros)]
 
 use actix_web::State as ActixState;
 use actix_web::{
     http::Method, middleware::Logger, server, App, AsyncResponder, Error, HttpMessage, HttpRequest,
     HttpResponse, Path,
 };
-use clap::{App as ClApp, Arg};
+use clap::{App as ClApp, Arg, crate_authors};
 use futures::future::Future;
+use log::*;
 use pubsub::find_service::{ConnectionResponse, PubSubResponse, ServiceStatus};
 use pubsub::{ConnectionInfo, PublisherDesc};
 use std::collections::HashMap;
