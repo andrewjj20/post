@@ -1,16 +1,8 @@
-extern crate pubsub;
-#[macro_use]
-extern crate clap;
-extern crate env_logger;
-extern crate futures;
-extern crate serde;
-extern crate serde_json;
-extern crate tokio;
-#[macro_use]
-extern crate log;
+#![feature(rust_2018_preview, use_extern_macros)]
 
-use clap::{App as ClApp, Arg};
+use clap::{App as ClApp, Arg, crate_authors, crate_version};
 use futures::future::Future;
+use log::*;
 use pubsub::find_service;
 use tokio::prelude::*;
 

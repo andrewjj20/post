@@ -102,7 +102,7 @@ pub enum ServerError {
 
 impl fmt::Display for ServerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use find_service::ServerError::*;
+        use crate::find_service::ServerError::*;
         match self {
             Success => write!(f, "Success"),
             HyperError(e) => write!(f, "hyper: {}", e),
@@ -120,7 +120,7 @@ impl Error for ServerError {
     }
 
     fn cause(&self) -> Option<&Error> {
-        use find_service::ServerError::*;
+        use crate::find_service::ServerError::*;
         match self {
             Success => None,
             HyperError(e) => Some(e),
@@ -184,7 +184,7 @@ where
     type Error = ServerError;
 
     fn poll(&mut self) -> Result<Async<Self::Item>, Self::Error> {
-        use find_service::RequestState::{Creation, ReadingBody, RequestActive};
+        use crate::find_service::RequestState::{Creation, ReadingBody, RequestActive};
         loop {
             self.state = match self.state {
                 Creation(ref mut req_future) => {
