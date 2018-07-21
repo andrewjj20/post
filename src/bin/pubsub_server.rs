@@ -4,8 +4,6 @@ extern crate log;
 extern crate actix;
 extern crate env_logger;
 #[macro_use]
-extern crate serde_derive;
-#[macro_use]
 extern crate clap;
 extern crate futures;
 extern crate pubsub;
@@ -18,6 +16,7 @@ use actix_web::{
 };
 use clap::{App as ClApp, Arg};
 use futures::future::Future;
+use pubsub::find_service::{ConnectionResponse, PubSubResponse, ServiceStatus};
 use pubsub::{ConnectionInfo, PublisherDesc};
 use std::collections::HashMap;
 use std::net::ToSocketAddrs;
@@ -25,59 +24,13 @@ use std::option::Option;
 use std::sync::{Arc, RwLock};
 use std::time;
 
-#[derive(Serialize, Debug)]
-struct BlankResponse {}
-
-#[derive(Serialize, Debug)]
-struct ConnectionResponse {
-    publisher: PublisherDesc,
-    info: ConnectionInfo,
-}
-
-#[derive(Serialize, Debug)]
-struct PubSubResponse<'a, T>
-where
-    T: serde::Serialize + 'a,
-{
-    status: &'a str,
-    timestamp: time::SystemTime,
-    response: &'a T,
-}
-
-impl<'a> PubSubResponse<'a, BlankResponse> {
-    fn status_only(status: &'a str) -> PubSubResponse<'a, BlankResponse> {
-        PubSubResponse {
-            status: status,
-            timestamp: time::SystemTime::now(),
-            response: &BlankResponse {},
-        }
-    }
-}
-
-impl<'a, T> PubSubResponse<'a, T>
-where
-    T: serde::Serialize,
-{
-    fn new(status: &'a str, response: &'a T) -> PubSubResponse<'a, T> {
-        PubSubResponse {
-            status: status,
-            timestamp: time::SystemTime::now(),
-            response: response,
-        }
-    }
-}
-#[derive(Serialize, Debug)]
-struct ServiceStatus {
-    count: usize,
-}
-
 type State = HashMap<String, ConnectionResponse>;
 type ProtectedState = Arc<RwLock<State>>;
 
 fn handle_service_status_request(req: HttpRequest<ProtectedState>) -> HttpResponse {
     let state = req.state().read().unwrap();
     let status = ServiceStatus { count: state.len() };
-    HttpResponse::Ok().json(PubSubResponse::new("Success", &status))
+    HttpResponse::Ok().json(PubSubResponse::new(String::from("Success"), &status))
 }
 
 fn handle_add_connection(
@@ -95,7 +48,7 @@ fn handle_add_connection(
             };
             let mut state = protected_state.write().unwrap();
             state.insert(info.publisher.name.clone(), info);
-            Ok(HttpResponse::Ok().json(PubSubResponse::status_only("success")))
+            Ok(HttpResponse::Ok().json(PubSubResponse::status_only(String::from("success"))))
         })
         .responder()
 }
@@ -104,15 +57,17 @@ fn handle_get_connection(info: (ActixState<ProtectedState>, Path<String>)) -> Ht
     let (prot_state, name) = info;
     let state = prot_state.read().unwrap();
     match state.get(&*name) {
-        Option::None => HttpResponse::NotFound().json(PubSubResponse::status_only("not found")),
-        Option::Some(e) => HttpResponse::Ok().json(PubSubResponse::new("success", e)),
+        Option::None => {
+            HttpResponse::NotFound().json(PubSubResponse::status_only(String::from("not found")))
+        }
+        Option::Some(e) => HttpResponse::Ok().json(PubSubResponse::new(String::from("success"), e)),
     }
 }
 
 fn handle_get_connections(req: HttpRequest<ProtectedState>) -> HttpResponse {
     let state = req.state().read().unwrap();
     info!("returning connections");
-    HttpResponse::Ok().json(PubSubResponse::new("success", &*state))
+    HttpResponse::Ok().json(PubSubResponse::new(String::from("success"), &*state))
 }
 
 fn actix_pubsub_app() -> App<ProtectedState> {
