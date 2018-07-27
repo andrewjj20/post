@@ -1,6 +1,6 @@
 #![feature(rust_2018_preview, use_extern_macros)]
 
-use clap::{App as ClApp, Arg, crate_authors, crate_version};
+use clap::{crate_authors, crate_version, App as ClApp, Arg};
 use futures::future::Future;
 use log::*;
 use pubsub::find_service;

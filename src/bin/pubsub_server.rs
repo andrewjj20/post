@@ -5,7 +5,7 @@ use actix_web::{
     http::Method, middleware::Logger, server, App, AsyncResponder, Error, HttpMessage, HttpRequest,
     HttpResponse, Path,
 };
-use clap::{App as ClApp, Arg, crate_authors};
+use clap::{crate_authors, App as ClApp, Arg};
 use futures::future::Future;
 use log::*;
 use pubsub::find_service::{ConnectionResponse, PubSubResponse, ServiceStatus};
