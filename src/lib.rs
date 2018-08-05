@@ -17,11 +17,35 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::time;
 use tokio::net::UdpSocket;
 
+type SendError = futures::sync::mpsc::SendError<DataGram>;
+
 #[derive(Debug)]
 pub enum Error {
     Empty,
     IoError(io::Error),
     FindServiceError(find_service::ServerError),
+    FramingError(framing::Error),
+    SendError(SendError),
+}
+
+type DataGram = (framing::Message, SocketAddr);
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            Error::Empty => write!(f, "Empty Error"),
+            Error::IoError(e) => write!(f, "IO Error: {}", e),
+            Error::FindServiceError(e) => write!(f, "Find Service Error: {}", e),
+            Error::FramingError(e) => write!(f, "Framing Error: {}", e),
+            Error::SendError(e) => write!(f, "Internal Stream Error: {}", e),
+        }
+    }
+}
+
+impl From<()> for Error {
+    fn from(_err: ()) -> Error {
+        Error::Empty
+    }
 }
 
 impl From<io::Error> for Error {
@@ -33,6 +57,18 @@ impl From<io::Error> for Error {
 impl From<find_service::ServerError> for Error {
     fn from(err: find_service::ServerError) -> Error {
         Error::FindServiceError(err)
+    }
+}
+
+impl From<framing::Error> for Error {
+    fn from(err: framing::Error) -> Error {
+        Error::FramingError(err)
+    }
+}
+
+impl From<SendError> for Error {
+    fn from(err: SendError) -> Error {
+        Error::SendError(err)
     }
 }
 
