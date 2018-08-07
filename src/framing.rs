@@ -1,39 +1,38 @@
 use super::Error as PubSubError;
+use super::{Generation, MAX_DATA_SIZE};
 use bytes::BytesMut;
 use rmp_serde as rmps;
 use rmp_serde::{decode::Error as DecodeError, encode::Error as EncodeError};
 use std::fmt::Display;
 use std::result;
 use std::vec::Vec;
-use tokio_io::codec::{Decoder, Encoder};
+use tokio_codec::{Decoder, Encoder};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BaseMsg {}
 
 impl Display for BaseMsg {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
         write!(f, "")
     }
 }
 
-pub const MAX_DATA_SIZE: usize = 1024;
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DataMsg {
-    generation: u64,
-    start: usize,
-    complete_size: usize,
+    pub generation: Generation,
+    pub chunk: usize,
+    pub complete_size: usize,
     #[serde(with = "serde_bytes")]
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl Display for DataMsg {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
         write!(
             f,
             "Generation: {}, start: {}, len: {}, finished_len: {}",
             self.generation,
-            self.start,
+            self.chunk,
             self.data.len(),
             self.complete_size
         )
@@ -47,7 +46,7 @@ pub enum Request {
 }
 
 impl Display for Request {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
         match self {
             Request::Subscribe(b) => write!(f, "Subscription {}", b),
             Request::Unsubscribe(b) => write!(f, "Unsubscription {}", b),
@@ -62,7 +61,7 @@ pub enum Message {
 }
 
 impl Display for Message {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
         match self {
             Message::Data(d) => write!(f, "Data {}", d),
             Message::Request(r) => write!(f, "Request {}", r),
@@ -85,7 +84,7 @@ impl Message {
         for (i, chunk) in chunks.enumerate() {
             ret.push(Message::Data(DataMsg {
                 generation: generation,
-                start: i * MAX_DATA_SIZE,
+                chunk: i,
                 complete_size: buf.len(),
                 data: Vec::from(chunk),
             }));
@@ -101,7 +100,7 @@ pub enum Error {
 }
 
 impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
         match self {
             Error::Serialize(e) => write!(f, "Serialize Error: {}", e),
             Error::Deserialize(e) => write!(f, "Deserialize Error: {}", e),

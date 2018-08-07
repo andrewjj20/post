@@ -39,7 +39,9 @@ fn handle_add_connection(
                 },
             };
             let mut state = protected_state.write().unwrap();
-            state.insert(info.publisher.name.clone(), info);
+            let name = info.publisher.name.clone();
+            state.insert(name.clone(), info);
+            debug!("Added Connection \"{}\"", name);
             Ok(HttpResponse::Ok().json(PubSubResponse::status_only(String::from("success"))))
         })
         .responder()
@@ -50,6 +52,7 @@ fn handle_get_connection(info: (ActixState<ProtectedState>, Path<String>)) -> Ht
     let state = prot_state.read().unwrap();
     match state.get(&*name) {
         Option::None => {
+            debug!("Did not find \"{}\"", *name);
             HttpResponse::NotFound().json(PubSubResponse::status_only(String::from("not found")))
         }
         Option::Some(e) => HttpResponse::Ok().json(PubSubResponse::new(String::from("success"), e)),
@@ -60,22 +63,6 @@ fn handle_get_connections(req: HttpRequest<ProtectedState>) -> HttpResponse {
     let state = req.state().read().unwrap();
     info!("returning connections");
     HttpResponse::Ok().json(PubSubResponse::new(String::from("success"), &*state))
-}
-
-fn actix_pubsub_app() -> App<ProtectedState> {
-    let state = Arc::new(RwLock::new(State::new()));
-    App::<ProtectedState>::with_state(state)
-        .resource("/status", move |r| {
-            r.method(Method::GET).h(handle_service_status_request)
-        })
-        .resource("/publishers", move |r| {
-            r.post().f(handle_add_connection);
-            r.get().f(handle_get_connections);
-        })
-        .resource("/publishers/{name}", move |r| {
-            r.method(Method::GET).with(handle_get_connection)
-        })
-        .middleware(Logger::default())
 }
 
 fn socket_validator(v: String) -> Result<(), String> {
@@ -105,9 +92,23 @@ fn main() {
 
     let sys = actix::System::new("example");
     let bind_info = matches.value_of("bind").unwrap();
+    let state = Arc::new(RwLock::new(State::new()));
 
-    server::new(actix_pubsub_app)
-        .bind(bind_info)
+    server::new(move || {
+        let state_clone = state.clone();
+        App::<ProtectedState>::with_state(state_clone)
+            .resource("/status", move |r| {
+                r.method(Method::GET).h(handle_service_status_request)
+            })
+            .resource("/publishers", move |r| {
+                r.post().f(handle_add_connection);
+                r.get().f(handle_get_connections);
+            })
+            .resource("/publishers/{name}", move |r| {
+                r.method(Method::GET).with(handle_get_connection)
+            })
+            .middleware(Logger::default())
+    }).bind(bind_info)
         .expect("Can not bind")
         .start();
 

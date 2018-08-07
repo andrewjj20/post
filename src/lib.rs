@@ -11,7 +11,9 @@ extern crate log;
 pub mod find_service;
 mod framing;
 pub mod publisher;
+pub mod subscriber;
 
+use std::fmt;
 use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time;
@@ -22,6 +24,7 @@ type SendError = futures::sync::mpsc::SendError<DataGram>;
 #[derive(Debug)]
 pub enum Error {
     Empty,
+    AddrParseError,
     IoError(io::Error),
     FindServiceError(find_service::ServerError),
     FramingError(framing::Error),
@@ -29,6 +32,8 @@ pub enum Error {
 }
 
 type DataGram = (framing::Message, SocketAddr);
+type Generation = u64;
+pub const MAX_DATA_SIZE: usize = 1024;
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
@@ -38,6 +43,7 @@ impl std::fmt::Display for Error {
             Error::FindServiceError(e) => write!(f, "Find Service Error: {}", e),
             Error::FramingError(e) => write!(f, "Framing Error: {}", e),
             Error::SendError(e) => write!(f, "Internal Stream Error: {}", e),
+            Error::AddrParseError => write!(f, "Error Parsing Address"),
         }
     }
 }
@@ -86,10 +92,7 @@ impl PublisherDesc {
         let addr = match self.to_socket_addrs()?.next() {
             Some(addr) => addr,
             None => {
-                return Err(Error::from(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Address not provided",
-                )))
+                return Err(Error::AddrParseError);
             }
         };
         return Ok(UdpSocket::bind(&addr)?);
@@ -103,21 +106,19 @@ impl<'a> ToSocketAddrs for PublisherDesc {
     }
 }
 
+impl fmt::Display for PublisherDesc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "name: {}, host_name: {}, port: {}",
+            self.name, self.host_name, self.port
+        )
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConnectionInfo {
     pub last_report: time::SystemTime,
-}
-
-pub enum SubscriptionState {
-    Active,
-    Closed,
-    Error,
-}
-
-pub struct Subscription {
-    desc: PublisherDesc,
-    state: SubscriptionState,
-    socket: UdpSocket,
 }
 
 #[cfg(test)]

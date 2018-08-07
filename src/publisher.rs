@@ -1,6 +1,6 @@
 use super::find_service;
 use super::framing::{Message, MessageCodec, Request};
-use super::{DataGram, Error, PublisherDesc, Result};
+use super::{DataGram, Error, Generation, PublisherDesc, Result};
 use futures::{
     future::Future,
     sync::mpsc::{self, Sender},
@@ -48,7 +48,7 @@ struct PublisherShared {
 pub struct Publisher {
     shared: Arc<Mutex<PublisherShared>>,
     sink: Sender<DataGram>,
-    generation: u64,
+    generation: Generation,
     current_send: Option<Vec<DataGram>>,
     in_poll: bool,
 }
@@ -144,7 +144,7 @@ impl Publisher {
         Ok(Publisher {
             shared,
             sink,
-            generation: 0,
+            generation: 1,
             current_send: None,
             in_poll: false,
         })
@@ -182,6 +182,12 @@ impl Publisher {
     }
 }
 
+impl Drop for Publisher {
+    fn drop(&mut self) {
+        self.shared.lock().unwrap().is_active = false;
+    }
+}
+
 impl Sink for Publisher {
     type SinkItem = Vec<u8>;
     type SinkError = Error;
@@ -206,7 +212,10 @@ impl Sink for Publisher {
                 Err(e)
             }
             Ok(a) => Ok(match a {
-                Async::Ready(_) => AsyncSink::Ready,
+                Async::Ready(_) => {
+                    self.generation += 1;
+                    AsyncSink::Ready
+                }
                 Async::NotReady => {
                     self.in_poll = true;
                     self.current_send = None;

@@ -232,6 +232,19 @@ pub fn server_status(base_uri: &str) -> RequestFuture<ServiceStatus> {
     RequestFuture::<ServiceStatus>::new(future::result(handoff))
 }
 
+pub fn get_descriptors_for_name(base_uri: &str, name: &str) -> RequestFuture<ConnectionResponse> {
+    let uri_as_str = format!("{}/publishers/{}", base_uri, name);
+    RequestFuture::<ConnectionResponse>::new(future::result(match uri_as_str.parse::<Uri>() {
+        Err(e) => Err(ServerError::from(e)),
+        Ok(url) => {
+            let mut req = hyper::Request::new(Body::empty());
+            *req.method_mut() = Method::GET;
+            *req.uri_mut() = url;
+            Ok(req)
+        }
+    }))
+}
+
 pub fn publisher_register(
     base_uri: &str,
     publister: &PublisherDesc,
