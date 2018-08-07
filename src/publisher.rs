@@ -90,6 +90,7 @@ fn handle_publisher_backend(
     match incomming.0 {
         Message::Request(r) => match r {
             Request::Subscribe(_) => {
+                info!("Subscripton {}", &incomming.1);
                 shared.lock().unwrap().subscribers.insert(incomming.1);
             }
             Request::Unsubscribe(_) => {
@@ -166,19 +167,30 @@ impl Publisher {
             Ok(poll_result?)
         } else {
             let current = self.current_send.as_mut().unwrap().pop().unwrap();
+            debug!("sending packet ({},{})", &current.0, &current.1);
             match self.sink.start_send(current)? {
                 AsyncSink::Ready => {
                     if self.current_send.as_mut().unwrap().is_empty() {
-                        self.current_send = None
+                        self.current_send = None;
                     }
                     Ok(Async::Ready(()))
-                }
+                },
                 AsyncSink::NotReady(c) => {
+                    self.in_poll = true;
                     self.current_send.as_mut().unwrap().push(c);
                     Ok(Async::NotReady)
                 }
             }
         }
+    }
+
+    fn do_send_loop(&mut self) -> Result<bool> {
+        while self.current_send.is_some() && !self.in_poll {
+            if let Async::NotReady = try!(self.do_send()) {
+                return Ok(false);
+            }
+        }
+        Ok(!self.in_poll)
     }
 }
 
@@ -193,6 +205,7 @@ impl Sink for Publisher {
     type SinkError = Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+
         if self.current_send.is_some() {
             return Ok(AsyncSink::NotReady(item));
         }
@@ -206,23 +219,9 @@ impl Sink for Publisher {
             ));
         }
 
-        match self.do_send() {
-            Err(e) => {
-                self.reset_stream();
-                Err(e)
-            }
-            Ok(a) => Ok(match a {
-                Async::Ready(_) => {
-                    self.generation += 1;
-                    AsyncSink::Ready
-                }
-                Async::NotReady => {
-                    self.in_poll = true;
-                    self.current_send = None;
-                    AsyncSink::NotReady(item)
-                }
-            }),
-        }
+        self.generation += 1;
+        try!(self.do_send_loop());
+        Ok(AsyncSink::Ready)
     }
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
