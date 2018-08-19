@@ -5,7 +5,7 @@ use futures::Async;
 use http::{self, StatusCode};
 use hyper;
 use hyper::rt::Stream;
-use hyper::{Body, Client, Method, Uri};
+use hyper::{header::HeaderValue, Body, Client, Method, Uri};
 use serde;
 use serde_json;
 use std::clone::Clone;
@@ -230,4 +230,44 @@ pub fn server_status(base_uri: &str) -> RequestFuture<ServiceStatus> {
     };
 
     RequestFuture::<ServiceStatus>::new(future::result(handoff))
+}
+
+pub fn get_descriptors_for_name(base_uri: &str, name: &str) -> RequestFuture<ConnectionResponse> {
+    let uri_as_str = format!("{}/publishers/{}", base_uri, name);
+    RequestFuture::<ConnectionResponse>::new(future::result(match uri_as_str.parse::<Uri>() {
+        Err(e) => Err(ServerError::from(e)),
+        Ok(url) => {
+            let mut req = hyper::Request::new(Body::empty());
+            *req.method_mut() = Method::GET;
+            *req.uri_mut() = url;
+            Ok(req)
+        }
+    }))
+}
+
+pub fn publisher_register(
+    base_uri: &str,
+    publister: &PublisherDesc,
+) -> RequestFuture<BlankResponse> {
+    let json = match serde_json::to_vec(publister) {
+        Err(e) => {
+            return RequestFuture::new(future::result(Err(ServerError::from(e))));
+        }
+        Ok(serialized) => serialized,
+    };
+    let handoff = match format!("{}/publishers", base_uri).parse::<Uri>() {
+        Err(e) => Err(ServerError::from(e)),
+        Ok(url) => {
+            let mut req = hyper::Request::new(Body::from(json));
+            *req.method_mut() = Method::POST;
+            *req.uri_mut() = url;
+            req.headers_mut().insert(
+                "content-type",
+                HeaderValue::from_str("application/json").unwrap(),
+            );
+            Ok(req)
+        }
+    };
+
+    RequestFuture::new(future::result(handoff))
 }

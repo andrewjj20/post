@@ -1,51 +1,144 @@
-use std::net::SocketAddr;
+use super::Error as PubSubError;
+use super::{Generation, MAX_DATA_SIZE};
+use bytes::BytesMut;
+use rmp_serde as rmps;
+use rmp_serde::{decode::Error as DecodeError, encode::Error as EncodeError};
+use std::fmt::Display;
 use std::result;
+use std::vec::Vec;
+use tokio_codec::{Decoder, Encoder};
 
-#[derive(Debug)]
-pub struct Error {
-    description: String,
-}
-impl Error {
-    pub fn new(description: String) -> Error {
-        Error {
-            description: description,
-        }
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BaseMsg {}
+
+impl Display for BaseMsg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
+        write!(f, "")
     }
 }
 
-pub type Result<T> = result::Result<T, Error>;
-
-#[derive(Debug)]
-pub struct BaseMsg {
-    addr: SocketAddr,
-    version: u16,
-    msg_type: u16,
-    flags: u32,
-}
-
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DataMsg {
-    base: BaseMsg,
-    generation: u64,
-    start: usize,
-    packet_size: usize,
-    complete_size: usize,
+    pub generation: Generation,
+    pub chunk: usize,
+    pub complete_size: usize,
+    #[serde(with = "serde_bytes")]
+    pub data: Vec<u8>,
 }
 
-#[derive(Debug)]
+impl Display for DataMsg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "Generation: {}, start: {}, len: {}, finished_len: {}",
+            self.generation,
+            self.chunk,
+            self.data.len(),
+            self.complete_size
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Request {
     Subscribe(BaseMsg),
     Unsubscribe(BaseMsg),
 }
 
-#[derive(Debug)]
+impl Display for Request {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
+        match self {
+            Request::Subscribe(b) => write!(f, "Subscription {}", b),
+            Request::Unsubscribe(b) => write!(f, "Unsubscription {}", b),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Message {
     Data(DataMsg),
     Request(Request),
 }
 
-impl Message {
-    pub fn parse(_addr: SocketAddr, _buf: &[u8], _size: usize) -> Result<Message> {
-        Err(Error::new(String::from("Not Implemented")))
+impl Display for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
+        match self {
+            Message::Data(d) => write!(f, "Data {}", d),
+            Message::Request(r) => write!(f, "Request {}", r),
+        }
     }
 }
+
+impl Message {
+    pub fn deserialize<'b>(buf: &'b [u8]) -> Result<Message, Error> {
+        Ok(rmps::from_slice::<Message>(buf.as_ref())?)
+    }
+
+    pub fn serialize(&self) -> result::Result<Vec<u8>, Error> {
+        Ok(rmps::to_vec(&self)?)
+    }
+
+    pub fn split_data_msgs(buf: &'a [u8], generation: u64) -> result::Result<Vec<Message>, Error> {
+        let chunks = buf.chunks(MAX_DATA_SIZE);
+        let mut ret: Vec<Message> = Vec::new();
+        for (i, chunk) in chunks.enumerate() {
+            ret.push(Message::Data(DataMsg {
+                generation: generation,
+                chunk: i,
+                complete_size: buf.len(),
+                data: Vec::from(chunk),
+            }));
+        }
+        Ok(ret)
+    }
+}
+
+#[derive(Debug)]
+pub enum Error {
+    Serialize(rmps::encode::Error),
+    Deserialize(rmps::decode::Error),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
+        match self {
+            Error::Serialize(e) => write!(f, "Serialize Error: {}", e),
+            Error::Deserialize(e) => write!(f, "Deserialize Error: {}", e),
+        }
+    }
+}
+
+impl From<EncodeError> for Error {
+    fn from(error: EncodeError) -> Error {
+        Error::Serialize(error)
+    }
+}
+
+impl From<DecodeError> for Error {
+    fn from(error: DecodeError) -> Error {
+        Error::Deserialize(error)
+    }
+}
+
+pub struct MessageCodec {}
+
+impl Encoder for MessageCodec {
+    type Item = Message;
+    type Error = PubSubError;
+
+    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        dst.extend_from_slice(item.serialize()?.as_slice());
+        Ok(())
+    }
+}
+
+impl Decoder for MessageCodec {
+    type Item = Message;
+    type Error = PubSubError;
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        Ok(Some(Message::deserialize(src)?))
+    }
+}
+
+#[cfg(test)]
+mod tests {}
