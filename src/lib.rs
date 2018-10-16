@@ -119,6 +119,7 @@ impl fmt::Display for PublisherDesc {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConnectionInfo {
     pub last_report: time::SystemTime,
+    pub expiration: time::SystemTime,
 }
 
 #[cfg(test)]

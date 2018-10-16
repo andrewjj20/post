@@ -1,8 +1,8 @@
-use super::find_service;
+use super::find_service::{self, PubSubResponse, RegistrationResponse};
 use super::framing::{Message, MessageCodec, Request};
 use super::{DataGram, Error, Generation, PublisherDesc, Result};
 use futures::{
-    future::Future,
+    future::{self, Future},
     sync::mpsc::{self, Sender},
     Async, AsyncSink, Poll, Sink, StartSend, Stream,
 };
@@ -14,36 +14,12 @@ use std::sync::{Arc, Mutex};
 use std::vec::Vec;
 use tokio::net::UdpFramed;
 
-pub struct PublisherSetup {
-    desc: PublisherDesc,
-    request: find_service::RequestFuture<find_service::BlankResponse>,
-}
-
-impl PublisherSetup {
-    pub fn new(
-        desc: PublisherDesc,
-        request: find_service::RequestFuture<find_service::BlankResponse>,
-    ) -> PublisherSetup {
-        PublisherSetup { desc, request }
-    }
-}
-
-impl Future for PublisherSetup {
-    type Item = Publisher;
-    type Error = Error;
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        try_ready!(self.request.poll());
-        Ok(Async::Ready(Publisher::from_description(
-            self.desc.clone(),
-        )?))
-    }
-}
-
 struct PublisherShared {
     subscribers: HashSet<SocketAddr>,
     is_active: bool,
 }
+
+type ProtectedShared = Arc<Mutex<PublisherShared>>;
 
 pub struct Publisher {
     shared: Arc<Mutex<PublisherShared>>,
@@ -102,18 +78,72 @@ fn handle_publisher_backend(
     None
 }
 
+fn log_err<T>(e: T)
+where
+    T: std::fmt::Display,
+{
+    error!("Registration Error {}", e);
+}
+
+fn initial_publisher_registration(
+    desc: PublisherDesc,
+    find_uri: String,
+    shared: ProtectedShared,
+) -> impl Future<Item = PubSubResponse<RegistrationResponse>, Error = ()> + 'a {
+    let mut initial_future: Option<find_service::RequestFuture<RegistrationResponse>> = None;
+    future::poll_fn(move || loop {
+        match initial_future {
+            Some(ref mut f) => match f.poll() {
+                Ok(a) => return Ok(a),
+                Err(e) => if shared.lock().unwrap().is_active {
+                    initial_future = None;
+                } else {
+                    return Err(e);
+                },
+            },
+            None => initial_future = Some(find_service::publisher_register(&find_uri, &desc)),
+        }
+    }).map_err(log_err)
+}
+
+fn publisher_registration(
+    desc: PublisherDesc,
+    find_uri: String,
+    shared: Arc<Mutex<PublisherShared>>,
+) {
+    tokio::spawn(
+        initial_publisher_registration(desc.clone(), find_uri.clone(), shared.clone()).and_then(
+            move |resp| {
+                let interval = resp.response.expiration_interval / 2;
+                info!("Registration interval {:?}", interval);
+                tokio::timer::Interval::new(std::time::Instant::now() + interval, interval)
+                    .map_err(log_err)
+                    .for_each(move |_| {
+                        find_service::publisher_register(&find_uri, &desc)
+                            .map_err(log_err)
+                            .map(|_| ())
+                    })
+            },
+        ),
+    );
+}
+
 impl Publisher {
-    pub fn new(name: String, host_name: String, port: u16, find_uri: &str) -> PublisherSetup {
+    pub fn new<'a>(
+        name: String,
+        host_name: String,
+        port: u16,
+        find_uri: String,
+    ) -> Result<Publisher> {
         let desc = PublisherDesc {
             name,
             host_name,
             port,
         };
-        let req = find_service::publisher_register(find_uri, &desc);
-        PublisherSetup::new(desc, req)
+        Publisher::from_description(desc, find_uri)
     }
 
-    fn from_description(desc: PublisherDesc) -> Result<Publisher> {
+    pub fn from_description(desc: PublisherDesc, find_uri: String) -> Result<Publisher> {
         let shared = Arc::new(Mutex::new(PublisherShared {
             subscribers: HashSet::new(),
             is_active: true,
@@ -141,6 +171,8 @@ impl Publisher {
                     error!("Sink Error {}", e);
                 }),
         );
+
+        publisher_registration(desc, find_uri, Arc::clone(&shared));
 
         Ok(Publisher {
             shared,
@@ -174,7 +206,7 @@ impl Publisher {
                         self.current_send = None;
                     }
                     Ok(Async::Ready(()))
-                },
+                }
                 AsyncSink::NotReady(c) => {
                     self.in_poll = true;
                     self.current_send.as_mut().unwrap().push(c);
@@ -205,7 +237,6 @@ impl Sink for Publisher {
     type SinkError = Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-
         if self.current_send.is_some() {
             return Ok(AsyncSink::NotReady(item));
         }

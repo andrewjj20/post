@@ -9,6 +9,7 @@ use hyper::{header::HeaderValue, Body, Client, Method, Uri};
 use serde;
 use serde_json;
 use std::clone::Clone;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
@@ -16,6 +17,11 @@ use std::time;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlankResponse {}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RegistrationResponse {
+    pub expiration_interval: time::Duration,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConnectionResponse {
@@ -40,6 +46,20 @@ impl PubSubResponse<BlankResponse> {
             timestamp: time::SystemTime::now(),
             response: BlankResponse {},
         }
+    }
+}
+
+impl PubSubResponse<RegistrationResponse> {
+    pub fn registration(
+        status: String,
+        expiration_interval: time::Duration,
+    ) -> PubSubResponse<RegistrationResponse> {
+        PubSubResponse::new(
+            status,
+            RegistrationResponse {
+                expiration_interval,
+            },
+        )
     }
 }
 
@@ -245,17 +265,30 @@ pub fn get_descriptors_for_name(base_uri: &str, name: &str) -> RequestFuture<Con
     }))
 }
 
-pub fn publisher_register(
-    base_uri: &str,
-    publister: &PublisherDesc,
-) -> RequestFuture<BlankResponse> {
+pub fn get_descriptors(base_uri: &str) -> RequestFuture<HashMap<String, ConnectionResponse>> {
+    let uri_as_str = format!("{}/publishers/", base_uri);
+    RequestFuture::new(future::result(match uri_as_str.parse::<Uri>() {
+        Err(e) => Err(ServerError::from(e)),
+        Ok(url) => {
+            let mut req = hyper::Request::new(Body::empty());
+            *req.method_mut() = Method::GET;
+            *req.uri_mut() = url;
+            Ok(req)
+        }
+    }))
+}
+
+pub fn publisher_register<'a>(
+    base_uri: &'a String,
+    publister: &'a PublisherDesc,
+) -> RequestFuture<RegistrationResponse> {
     let json = match serde_json::to_vec(publister) {
         Err(e) => {
             return RequestFuture::new(future::result(Err(ServerError::from(e))));
         }
         Ok(serialized) => serialized,
     };
-    let handoff = match format!("{}/publishers", base_uri).parse::<Uri>() {
+    let handoff = match format!("{}/publishers/", base_uri).parse::<Uri>() {
         Err(e) => Err(ServerError::from(e)),
         Ok(url) => {
             let mut req = hyper::Request::new(Body::from(json));
