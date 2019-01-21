@@ -1,5 +1,3 @@
-#![feature(rust_2018_preview, use_extern_macros)]
-
 #[macro_use]
 extern crate log;
 

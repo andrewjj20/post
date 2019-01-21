@@ -1,6 +1,3 @@
-#![feature(rust_2018_preview)]
-#![feature(nll)]
-
 #[macro_use]
 extern crate futures;
 #[macro_use]

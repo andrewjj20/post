@@ -78,7 +78,10 @@ impl Message {
         Ok(rmps::to_vec(&self)?)
     }
 
-    pub fn split_data_msgs(buf: &'a [u8], generation: u64) -> result::Result<Vec<Message>, Error> {
+    pub fn split_data_msgs<'a>(
+        buf: &'a [u8],
+        generation: u64,
+    ) -> result::Result<Vec<Message>, Error> {
         let chunks = buf.chunks(MAX_DATA_SIZE);
         let mut ret: Vec<Message> = Vec::new();
         for (i, chunk) in chunks.enumerate() {

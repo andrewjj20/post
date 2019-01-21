@@ -1,5 +1,3 @@
-#![feature(rust_2018_preview, use_extern_macros)]
-
 #[macro_use]
 extern crate log;
 
@@ -43,14 +41,15 @@ fn main() {
                         error!("UTF Error {}", e);
                         None
                     }
-                }).forward(tokio_codec::FramedWrite::new(
-                        tokio::io::stdout(),
-                        tokio_codec::LinesCodec::new(),
-                    ))
-                    .map_err(|e| {
-                        error!("Sink Error {}", e);
-                    })
-                    .map(|_| ())
+                })
+                .forward(tokio_codec::FramedWrite::new(
+                    tokio::io::stdout(),
+                    tokio_codec::LinesCodec::new(),
+                ))
+                .map_err(|e| {
+                    error!("Sink Error {}", e);
+                })
+                .map(|_| ())
             }),
     );
 }

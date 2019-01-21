@@ -23,7 +23,7 @@ pub struct Subscription {
 
 impl Subscription {
     pub fn new(desc: PublisherDesc) -> Result<Subscription> {
-        let addr = match try!(desc.to_socket_addrs()).next() {
+        let addr = match desc.to_socket_addrs()?.next() {
             Some(a) => a,
             None => return Err(Error::AddrParseError),
         };
@@ -36,7 +36,7 @@ impl Subscription {
             0,
         );
         let (udp_sink, udp_stream) =
-            UdpFramed::new(try!(UdpSocket::bind(&bind_addr)), MessageCodec {}).split();
+            UdpFramed::new(UdpSocket::bind(&bind_addr)?, MessageCodec {}).split();
 
         let (sender, receiver) = mpsc::channel(1);
 
@@ -44,9 +44,10 @@ impl Subscription {
             stream::once::<DataGram, Error>(Ok((
                 Message::Request(Request::Subscribe(BaseMsg {})),
                 addr,
-            ))).forward(sender.clone())
-                .map(|_| ())
-                .map_err(|_| ()),
+            )))
+            .forward(sender.clone())
+            .map(|_| ())
+            .map_err(|_| ()),
         );
 
         {
@@ -60,7 +61,8 @@ impl Subscription {
                         sink.send((
                             Message::Request(Request::Unsubscribe(BaseMsg {})),
                             addr_moveable,
-                        )).map(|_| ())
+                        ))
+                        .map(|_| ())
                     })
                     .map_err(|e| {
                         error!("Sink Error {}", e);

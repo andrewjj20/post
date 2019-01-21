@@ -1,5 +1,3 @@
-#![feature(rust_2018_preview, use_extern_macros)]
-
 use clap::{crate_authors, crate_version, App as ClApp, Arg, SubCommand};
 use futures::future::Future;
 use log::*;

@@ -89,21 +89,24 @@ fn initial_publisher_registration(
     desc: PublisherDesc,
     find_uri: String,
     shared: ProtectedShared,
-) -> impl Future<Item = PubSubResponse<RegistrationResponse>, Error = ()> + 'a {
+) -> impl Future<Item = PubSubResponse<RegistrationResponse>, Error = ()> {
     let mut initial_future: Option<find_service::RequestFuture<RegistrationResponse>> = None;
     future::poll_fn(move || loop {
         match initial_future {
             Some(ref mut f) => match f.poll() {
                 Ok(a) => return Ok(a),
-                Err(e) => if shared.lock().unwrap().is_active {
-                    initial_future = None;
-                } else {
-                    return Err(e);
-                },
+                Err(e) => {
+                    if shared.lock().unwrap().is_active {
+                        initial_future = None;
+                    } else {
+                        return Err(e);
+                    }
+                }
             },
             None => initial_future = Some(find_service::publisher_register(&find_uri, &desc)),
         }
-    }).map_err(log_err)
+    })
+    .map_err(log_err)
 }
 
 fn publisher_registration(
@@ -218,7 +221,7 @@ impl Publisher {
 
     fn do_send_loop(&mut self) -> Result<bool> {
         while self.current_send.is_some() && !self.in_poll {
-            if let Async::NotReady = try!(self.do_send()) {
+            if let Async::NotReady = self.do_send()? {
                 return Ok(false);
             }
         }
@@ -251,7 +254,7 @@ impl Sink for Publisher {
         }
 
         self.generation += 1;
-        try!(self.do_send_loop());
+        self.do_send_loop()?;
         Ok(AsyncSink::Ready)
     }
 

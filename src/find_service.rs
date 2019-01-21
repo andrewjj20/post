@@ -221,11 +221,11 @@ where
                     let raw_body = try_ready!(body.poll());
                     let ret;
                     if status.is_success() {
-                        let deserialized = try!(serde_json::from_slice::<Self::Item>(&raw_body));
+                        let deserialized = serde_json::from_slice::<Self::Item>(&raw_body)?;
                         ret = Ok(Async::Ready(deserialized));
                     } else {
                         let deserialized =
-                            try!(serde_json::from_slice::<PubSubBlankResponse>(&raw_body));
+                            serde_json::from_slice::<PubSubBlankResponse>(&raw_body)?;
                         ret = Err(ServerError::PubSubServerError(PubSubServerError::new(
                             status,
                             deserialized,

@@ -1,5 +1,3 @@
-#![feature(rust_2018_preview, use_extern_macros)]
-
 use actix_web::State as ActixState;
 use actix_web::{
     http::Method, middleware::Logger, server, App, AsyncResponder, Error, HttpMessage, HttpRequest,
@@ -169,9 +167,10 @@ fn main() {
                 r.method(Method::GET).with(handle_get_connection)
             })
             .middleware(Logger::default())
-    }).bind(bind_info)
-        .expect("Can not bind")
-        .start();
+    })
+    .bind(bind_info)
+    .expect("Can not bind")
+    .start();
 
     remove_expired_publishers(
         state_for_cleaner,
