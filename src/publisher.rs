@@ -7,16 +7,34 @@ use futures::{
     Async, AsyncSink, Poll, Sink, StartSend, Stream,
 };
 use itertools::Itertools;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::iter::FromIterator;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::vec::Vec;
-use tokio::net::UdpFramed;
+use tokio::{
+    net::UdpFramed,
+};
+
+struct Subscriber {
+    _addr: SocketAddr,
+}
 
 struct PublisherShared {
-    subscribers: HashSet<SocketAddr>,
+    subscribers: HashMap<SocketAddr, Subscriber>,
     is_active: bool,
+}
+
+impl PublisherShared {
+    fn handle_subscription(&mut self, addr: SocketAddr) {
+        let sub = Subscriber {
+            _addr: addr.clone(),
+        };
+        self.subscribers.insert(addr, sub);
+    }
+    fn handle_unsubscribe(&mut self, addr: &SocketAddr) {
+        self.subscribers.remove(addr);
+    }
 }
 
 type ProtectedShared = Arc<Mutex<PublisherShared>>;
@@ -67,13 +85,17 @@ fn handle_publisher_backend(
         Message::Request(r) => match r {
             Request::Subscribe(_) => {
                 info!("Subscripton {}", &incomming.1);
-                shared.lock().unwrap().subscribers.insert(incomming.1);
+                shared.lock().unwrap().handle_subscription(incomming.1);
             }
             Request::Unsubscribe(_) => {
-                shared.lock().unwrap().subscribers.remove(&incomming.1);
+                shared.lock().unwrap().handle_unsubscribe(&incomming.1);
             }
         },
         Message::Data(_) => error!("Data Message sent to publisher from {}", incomming.1),
+        _ => error!(
+            "Unhandled Message received from {} :{}",
+            incomming.1, incomming.0
+        ),
     };
     None
 }
@@ -148,7 +170,7 @@ impl Publisher {
 
     pub fn from_description(desc: PublisherDesc, find_uri: String) -> Result<Publisher> {
         let shared = Arc::new(Mutex::new(PublisherShared {
-            subscribers: HashSet::new(),
+            subscribers: HashMap::new(),
             is_active: true,
         }));
         let (udp_sink, udp_stream) =
@@ -249,7 +271,7 @@ impl Sink for Publisher {
             self.current_send = Some(Vec::from_iter(
                 Message::split_data_msgs(item.as_slice(), self.generation)?
                     .into_iter()
-                    .cartesian_product(shared.subscribers.iter().cloned()),
+                    .cartesian_product(shared.subscribers.keys().cloned()),
             ));
         }
 

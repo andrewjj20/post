@@ -5,6 +5,7 @@ use rmp_serde as rmps;
 use rmp_serde::{decode::Error as DecodeError, encode::Error as EncodeError};
 use std::fmt::Display;
 use std::result;
+use std::time::Duration;
 use std::vec::Vec;
 use tokio_codec::{Decoder, Encoder};
 
@@ -55,9 +56,39 @@ impl Display for Request {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Subscription {
+    pub timeout_interval: Duration,
+}
+
+impl Display for Subscription {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "Subscription interval: {}.{:09}",
+            self.timeout_interval.as_secs(),
+            self.timeout_interval.subsec_nanos()
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum Acknowledgement {
+    Subscription(Subscription),
+}
+
+impl Display for Acknowledgement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
+        match self {
+            Acknowledgement::Subscription(b) => write!(f, "Subscription {}", b),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Message {
     Data(DataMsg),
     Request(Request),
+    Acknowledgement(Acknowledgement),
 }
 
 impl Display for Message {
@@ -65,6 +96,7 @@ impl Display for Message {
         match self {
             Message::Data(d) => write!(f, "Data {}", d),
             Message::Request(r) => write!(f, "Request {}", r),
+            Message::Acknowledgement(r) => write!(f, "Acknowledgement {}", r),
         }
     }
 }
