@@ -3,6 +3,7 @@ extern crate log;
 
 use clap::{crate_authors, crate_version, App as ClApp, Arg};
 use pubsub::publisher::Publisher;
+use std::time::Duration;
 use tokio::prelude::*;
 
 fn main() {
@@ -32,6 +33,14 @@ fn main() {
                 .takes_value(true)
                 .required(true),
         )
+        .arg(
+            Arg::with_name("subscriber_timeout")
+                .short("t")
+                .long("subscriber-timeout")
+                .takes_value(true)
+                .default_value("30")
+                .required(true),
+        )
         .get_matches();
 
     let url = String::from(matches.value_of("url").unwrap());
@@ -42,11 +51,25 @@ fn main() {
         .unwrap()
         .parse()
         .expect("invalid integer in port");
+    let subscriber_timeout = matches
+        .value_of("subscriber_timeout")
+        .unwrap()
+        .parse()
+        .expect("invalid integer in port");
     tokio::run(future::finished::<(), ()>(()).and_then(move |_| {
         tokio_codec::FramedRead::new(tokio::io::stdin(), tokio_codec::LinesCodec::new())
             .map_err(|e| pubsub::Error::from(e))
             .map(|s| Vec::from(s))
-            .forward(Publisher::new(name, host_name, port, url).unwrap())
+            .forward(
+                Publisher::new(
+                    name,
+                    host_name,
+                    port,
+                    Duration::new(subscriber_timeout, 0),
+                    url,
+                )
+                .unwrap(),
+            )
             .map(|_| ())
             .map_err(|e| {
                 error!("Error writing to publisher {}", e);
