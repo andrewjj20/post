@@ -45,7 +45,7 @@ impl PublisherShared {
             }
             None => {
                 let sub = Subscriber {
-                    addr: addr.clone(),
+                    addr: addr,
                     expiration,
                 };
                 info!("Subscribe {:?}", sub);
@@ -168,7 +168,7 @@ fn publisher_registration(
                         .then(move |result| {
                             future::ok(match result {
                                 Ok(resp) => ((), resp.response.expiration_interval / 2),
-                                Err(_) => ((), interval.clone()),
+                                Err(_) => ((), interval),
                             })
                         }),
                 )
@@ -181,7 +181,7 @@ fn publisher_registration(
 }
 
 impl Publisher {
-    pub fn new<'a>(
+    pub fn new(
         name: String,
         host_name: String,
         port: u16,

@@ -53,7 +53,7 @@ impl Subscription {
         );
 
         {
-            let addr_moveable = addr.clone();
+            let addr_moveable = addr;
             tokio::spawn(
                 receiver
                     .map_err(|_| Error::Empty)
@@ -133,16 +133,16 @@ impl Stream for Subscription {
                                 debug!("Subscription Ack: {}", sub);
                                 let timeout = sub.timeout_interval / 2;
                                 let sink = self.sink.clone();
-                                let addr = self.addr.clone();
+                                let addr = self.addr;
                                 let resub = timer::Delay::new(time::Instant::now() + timeout)
-                                    .map_err(|e| Error::from(e))
+                                    .map_err(Error::from)
                                     .and_then(move |_| {
                                         debug!("Sending Resubscription");
                                         sink.send((
                                             Message::Request(Request::Subscribe(BaseMsg {})),
                                             addr,
                                         ))
-                                        .map_err(|e| Error::from(e))
+                                        .map_err(Error::from)
                                     })
                                     .map(|_| {
                                         debug!("Sent Resubscription");

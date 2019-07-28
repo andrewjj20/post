@@ -50,7 +50,7 @@ fn handle_add_connection(
             let mut state = protected_state.write().unwrap();
             let now = time::SystemTime::now();
             let info = ConnectionResponse {
-                publisher: publisher,
+                publisher,
                 info: ConnectionInfo {
                     last_report: now,
                     expiration: now + state.publisher_timeout,

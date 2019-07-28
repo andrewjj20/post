@@ -102,16 +102,16 @@ impl Display for Message {
 }
 
 impl Message {
-    pub fn deserialize<'b>(buf: &'b [u8]) -> Result<Message, Error> {
-        Ok(rmps::from_slice::<Message>(buf.as_ref())?)
+    pub fn deserialize(buf: &[u8]) -> Result<Message, Error> {
+        Ok(rmps::from_slice::<Message>(buf)?)
     }
 
     pub fn serialize(&self) -> result::Result<Vec<u8>, Error> {
         Ok(rmps::to_vec(&self)?)
     }
 
-    pub fn split_data_msgs<'a>(
-        buf: &'a [u8],
+    pub fn split_data_msgs(
+        buf: &[u8],
         generation: u64,
     ) -> result::Result<Vec<Message>, Error> {
         let chunks = buf.chunks(MAX_DATA_SIZE);

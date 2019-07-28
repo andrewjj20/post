@@ -177,7 +177,7 @@ impl From<PubSubServerError> for ServerError {
 }
 
 enum RequestState {
-    Creation(FutureResult<hyper::Request<hyper::Body>, ServerError>),
+    Creation(Box<FutureResult<hyper::Request<hyper::Body>, ServerError>>),
     RequestActive(hyper::client::ResponseFuture),
     ReadingBody(StatusCode, stream::Concat2<Body>),
 }
@@ -190,7 +190,7 @@ pub struct RequestFuture<T> {
 impl<T> RequestFuture<T> {
     fn new(req: FutureResult<hyper::Request<hyper::Body>, ServerError>) -> RequestFuture<T> {
         RequestFuture {
-            state: RequestState::Creation(req),
+            state: RequestState::Creation(Box::new(req)),
             response: PhantomData,
         }
     }
