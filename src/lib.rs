@@ -101,7 +101,7 @@ impl PublisherDesc {
                 return Err(Error::AddrParseError);
             }
         };
-        return Ok(UdpSocket::bind(&addr)?);
+        Ok(UdpSocket::bind(&addr)?)
     }
 }
 

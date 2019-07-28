@@ -42,7 +42,7 @@ where
 impl PubSubResponse<BlankResponse> {
     pub fn status_only(status: String) -> PubSubResponse<BlankResponse> {
         PubSubResponse {
-            status: status,
+            status,
             timestamp: time::SystemTime::now(),
             response: BlankResponse {},
         }
@@ -71,9 +71,9 @@ where
 {
     pub fn new(status: String, response: T) -> PubSubResponse<T> {
         PubSubResponse {
-            status: status,
+            status,
             timestamp: time::SystemTime::now(),
-            response: response,
+            response,
         }
     }
 }
@@ -278,11 +278,11 @@ pub fn get_descriptors(base_uri: &str) -> RequestFuture<HashMap<String, Connecti
     }))
 }
 
-pub fn publisher_register<'a>(
-    base_uri: &'a String,
-    publister: &'a PublisherDesc,
+pub fn publisher_register(
+    base_uri: &str,
+    publister: &PublisherDesc,
 ) -> RequestFuture<RegistrationResponse> {
-    let json = match serde_json::to_vec(publister) {
+    let json = match serde_json::to_vec(&publister) {
         Err(e) => {
             return RequestFuture::new(future::result(Err(ServerError::from(e))));
         }

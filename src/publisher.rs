@@ -1,4 +1,4 @@
-use super::find_service::{self, PubSubResponse, RegistrationResponse};
+use super::find_service;
 use super::framing;
 use super::framing::{Acknowledgement, Message, MessageCodec, Request};
 use super::{DataGram, Error, Generation, PublisherDesc, Result};
@@ -14,7 +14,9 @@ use std::sync::{Arc, Mutex};
 use std::time;
 use std::vec::Vec;
 use tokio::net::UdpFramed;
+use tokio::prelude::*;
 use tokio::sync::mpsc::{self, Sender};
+use tokio::timer;
 
 #[derive(Debug)]
 struct Subscriber {
@@ -44,7 +46,7 @@ impl PublisherShared {
             None => {
                 let sub = Subscriber {
                     addr: addr.clone(),
-                    expiration: expiration,
+                    expiration,
                 };
                 info!("Subscribe {:?}", sub);
                 self.subscribers.insert(addr, sub);
@@ -73,7 +75,7 @@ impl PublisherShared {
 type ProtectedShared = Arc<Mutex<PublisherShared>>;
 
 pub struct Publisher {
-    shared: Arc<Mutex<PublisherShared>>,
+    shared: ProtectedShared,
     sink: Sender<DataGram>,
     generation: Generation,
     current_send: Option<Vec<DataGram>>,
@@ -82,11 +84,11 @@ pub struct Publisher {
 
 struct PublisherInternal<T> {
     protocol: T,
-    shared: Arc<Mutex<PublisherShared>>,
+    shared: ProtectedShared,
 }
 
 impl<T> PublisherInternal<T> {
-    fn new(protocol: T, shared: Arc<Mutex<PublisherShared>>) -> PublisherInternal<T> {
+    fn new(protocol: T, shared: ProtectedShared) -> PublisherInternal<T> {
         PublisherInternal { protocol, shared }
     }
 
@@ -114,7 +116,8 @@ fn handle_publisher_backend(
     shared: Arc<Mutex<PublisherShared>>,
     incomming: DataGram,
 ) -> Option<DataGram> {
-    match incomming.0 {
+    debug!("Message received: {}", incomming.0);
+    let ret = match incomming.0 {
         Message::Request(r) => match r {
             Request::Subscribe(_) => shared.lock().unwrap().handle_subscription(incomming.1),
             Request::Unsubscribe(_) => shared.lock().unwrap().handle_unsubscribe(&incomming.1),
@@ -130,7 +133,11 @@ fn handle_publisher_backend(
             );
             None
         }
+    };
+    if let Some(dgram) = &ret {
+        debug!("Response: {:?}", dgram);
     }
+    ret
 }
 
 fn log_err<T>(e: T)
@@ -140,49 +147,36 @@ where
     error!("Registration Error {}", e);
 }
 
-fn initial_publisher_registration(
-    desc: PublisherDesc,
-    find_uri: String,
-    shared: ProtectedShared,
-) -> impl Future<Item = PubSubResponse<RegistrationResponse>, Error = ()> {
-    let mut initial_future: Option<find_service::RequestFuture<RegistrationResponse>> = None;
-    future::poll_fn(move || loop {
-        match initial_future {
-            Some(ref mut f) => match f.poll() {
-                Ok(a) => return Ok(a),
-                Err(e) => {
-                    if shared.lock().unwrap().is_active {
-                        initial_future = None;
-                    } else {
-                        return Err(e);
-                    }
-                }
-            },
-            None => initial_future = Some(find_service::publisher_register(&find_uri, &desc)),
-        }
-    })
-    .map_err(log_err)
-}
-
 fn publisher_registration(
     desc: PublisherDesc,
     find_uri: String,
     shared: Arc<Mutex<PublisherShared>>,
 ) {
+    let reg_info = Arc::new((find_uri, desc));
     tokio::spawn(
-        initial_publisher_registration(desc.clone(), find_uri.clone(), shared.clone()).and_then(
-            move |resp| {
-                let interval = resp.response.expiration_interval / 2;
-                info!("Registration interval {:?}", interval);
-                tokio::timer::Interval::new(std::time::Instant::now() + interval, interval)
-                    .map_err(log_err)
-                    .for_each(move |_| {
-                        find_service::publisher_register(&find_uri, &desc)
-                            .map_err(log_err)
-                            .map(|_| ())
-                    })
-            },
-        ),
+        stream::unfold(std::time::Duration::new(0, 0), move |interval| {
+            let fold_reg_info = Arc::clone(&reg_info);
+            if shared.lock().unwrap().is_active {
+                Some(
+                    timer::Delay::new(std::time::Instant::now() + interval)
+                        .map_err(log_err)
+                        .and_then(move |_| {
+                            let this_reg_info = Arc::clone(&fold_reg_info);
+                            find_service::publisher_register(&this_reg_info.0, &this_reg_info.1)
+                                .map_err(log_err)
+                        })
+                        .then(move |result| {
+                            future::ok(match result {
+                                Ok(resp) => ((), resp.response.expiration_interval / 2),
+                                Err(_) => ((), interval.clone()),
+                            })
+                        }),
+                )
+            } else {
+                None
+            }
+        })
+        .for_each(|_| future::ok(())),
     );
 }
 

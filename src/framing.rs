@@ -118,7 +118,7 @@ impl Message {
         let mut ret: Vec<Message> = Vec::new();
         for (i, chunk) in chunks.enumerate() {
             ret.push(Message::Data(DataMsg {
-                generation: generation,
+                generation,
                 chunk: i,
                 complete_size: buf.len(),
                 data: Vec::from(chunk),

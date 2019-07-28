@@ -103,6 +103,7 @@ impl Stream for Subscription {
                 None => return Ok(Async::Ready(None)),
             };
 
+            debug!("message {:?}", message);
             if message.1 == self.addr {
                 match message.0 {
                     Message::Data(data) => {
@@ -125,33 +126,35 @@ impl Stream for Subscription {
                             }
                         }
                     }
-                    Message::Acknowledgement(ack) => match ack {
-                        Acknowledgement::Subscription(sub) => {
-                            let timeout = sub.timeout_interval / 2;
-                            let sink = self.sink.clone();
-                            let addr = self.addr.clone();
-                            let resub = timer::Delay::new(time::Instant::now() + timeout)
-                                .map_err(|e| Error::from(e))
-                                .and_then(move |_| {
-                                    debug!("Sending Resubscription");
-                                    sink.send((
-                                        Message::Request(Request::Subscribe(BaseMsg {})),
-                                        addr,
-                                    ))
+                    Message::Acknowledgement(ack) => {
+                        debug!("Ack: {:?}", ack);
+                        match ack {
+                            Acknowledgement::Subscription(sub) => {
+                                debug!("Subscription Ack: {}", sub);
+                                let timeout = sub.timeout_interval / 2;
+                                let sink = self.sink.clone();
+                                let addr = self.addr.clone();
+                                let resub = timer::Delay::new(time::Instant::now() + timeout)
                                     .map_err(|e| Error::from(e))
-                                })
-                                .map(|_| {
-                                    debug!("Sent Resubscription");
-                                    ()
-                                })
-                                .map_err(|e| {
-                                    error!("Issue sending resubscription: {}", e);
-                                    ()
-                                });
+                                    .and_then(move |_| {
+                                        debug!("Sending Resubscription");
+                                        sink.send((
+                                            Message::Request(Request::Subscribe(BaseMsg {})),
+                                            addr,
+                                        ))
+                                        .map_err(|e| Error::from(e))
+                                    })
+                                    .map(|_| {
+                                        debug!("Sent Resubscription");
+                                    })
+                                    .map_err(|e| {
+                                        error!("Issue sending resubscription: {}", e);
+                                    });
 
-                            tokio::spawn(resub);
+                                tokio::spawn(resub);
+                            }
                         }
-                    },
+                    }
                     _ => {
                         //Skip unknown
                         debug!("Unknown Message: {}", message.0);
