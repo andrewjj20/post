@@ -16,7 +16,7 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::time;
 use tokio::net::UdpSocket;
 
-type SendError = futures::sync::mpsc::SendError<DataGram>;
+type SendError = tokio::sync::mpsc::error::SendError;
 
 #[derive(Debug)]
 pub enum Error {
@@ -26,6 +26,7 @@ pub enum Error {
     FindServiceError(find_service::ServerError),
     FramingError(framing::Error),
     SendError(SendError),
+    TimerError(tokio::timer::Error),
 }
 
 type DataGram = (framing::Message, SocketAddr);
@@ -41,6 +42,7 @@ impl std::fmt::Display for Error {
             Error::FramingError(e) => write!(f, "Framing Error: {}", e),
             Error::SendError(e) => write!(f, "Internal Stream Error: {}", e),
             Error::AddrParseError => write!(f, "Error Parsing Address"),
+            Error::TimerError(e) => write!(f, "Error in tokio timer: {}", e),
         }
     }
 }
@@ -75,6 +77,12 @@ impl From<SendError> for Error {
     }
 }
 
+impl From<tokio::timer::Error> for Error {
+    fn from(err: tokio::timer::Error) -> Error {
+        Error::TimerError(err)
+    }
+}
+
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -82,6 +90,7 @@ pub struct PublisherDesc {
     pub name: String,
     pub host_name: String,
     pub port: u16,
+    pub subscriber_expiration: time::Duration,
 }
 
 impl PublisherDesc {
