@@ -1,0 +1,23 @@
+[package]
+name = "Examples"
+version = "0.0.0"
+publish = false
+edition = "2018"
+
+[dev-dependencies]
+pubsub = { version = "0.1.0", path = "../pubsub" }
+clap = "2.32"
+futures = "0.1"
+log = "0.4"
+env_logger = "0.5"
+tokio = "0.1"
+tokio-codec = "0.1"
+tokio-io = "0.1"
+
+[[example]]
+name = "stdin_publisher"
+path = "stdin_publisher.rs"
+
+[[example]]
+name = "stdout_subscriber"
+path = "stdout_subscriber.rs"

@@ -1,0 +1,18 @@
+[package]
+name = "pubsub-meetup"
+version = "0.0.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+pubsub = { version = "0.1.0", path = "../pubsub" }
+actix-web = "0.7"
+actix = "0.7"
+clap = "2.32"
+env_logger = "0.5"
+futures = "0.1"
+log = "0.4"
+tokio = "0.1"
+serde = "1.0"
+serde_json = "1.0"
+
