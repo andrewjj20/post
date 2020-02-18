@@ -7,7 +7,8 @@ edition = "2018"
 [dev-dependencies]
 pubsub = { version = "0.1.0", path = "../pubsub" }
 clap = "2.32"
-futures = "0.1"
+futures = { version = "0.3", features = ["compat"]}
+futures01 = { package = "futures", version = "0.1"}
 log = "0.4"
 env_logger = "0.5"
 tokio = "0.1"

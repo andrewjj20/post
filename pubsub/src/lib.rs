@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate futures;
+extern crate futures01;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
@@ -10,6 +10,7 @@ mod framing;
 pub mod publisher;
 pub mod subscriber;
 
+use find_service::proto;
 use std::fmt;
 use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -23,7 +24,6 @@ pub enum Error {
     Empty,
     AddrParseError,
     IoError(io::Error),
-    FindServiceError(find_service::ServerError),
     FramingError(framing::Error),
     SendError(SendError),
     TimerError(tokio::timer::Error),
@@ -38,7 +38,6 @@ impl std::fmt::Display for Error {
         match self {
             Error::Empty => write!(f, "Empty Error"),
             Error::IoError(e) => write!(f, "IO Error: {}", e),
-            Error::FindServiceError(e) => write!(f, "Find Service Error: {}", e),
             Error::FramingError(e) => write!(f, "Framing Error: {}", e),
             Error::SendError(e) => write!(f, "Internal Stream Error: {}", e),
             Error::AddrParseError => write!(f, "Error Parsing Address"),
@@ -56,12 +55,6 @@ impl From<()> for Error {
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {
         Error::IoError(err)
-    }
-}
-
-impl From<find_service::ServerError> for Error {
-    fn from(err: find_service::ServerError) -> Error {
-        Error::FindServiceError(err)
     }
 }
 
@@ -90,7 +83,7 @@ pub struct PublisherDesc {
     pub name: String,
     pub host_name: String,
     pub port: u16,
-    pub subscriber_expiration: time::Duration,
+    pub subscriber_expiration_interval: time::Duration,
 }
 
 impl PublisherDesc {
@@ -102,6 +95,53 @@ impl PublisherDesc {
             }
         };
         Ok(UdpSocket::bind(&addr)?)
+    }
+}
+
+#[derive(Debug)]
+pub enum PublisherConversionError {
+    Time(proto::TimeError),
+    NoExpiration,
+}
+
+impl std::fmt::Display for PublisherConversionError {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmt, "Publisher Conversion Error: {:?}", self)
+    }
+}
+
+impl std::error::Error for PublisherConversionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}
+
+impl std::convert::From<proto::TimeError> for PublisherConversionError {
+    fn from(error: proto::TimeError) -> Self {
+        PublisherConversionError::Time(error)
+    }
+}
+
+impl std::convert::TryFrom<proto::PublisherDesc> for PublisherDesc {
+    type Error = PublisherConversionError;
+    fn try_from(proto_value: proto::PublisherDesc) -> std::result::Result<Self, Self::Error> {
+        let proto::PublisherDesc {
+            name,
+            host_name,
+            port: port32,
+            subscriber_expiration_interval: proto_interval,
+        } = proto_value;
+        let subscriber_expiration_interval: time::Duration = match proto_interval {
+            Some(expiration) => expiration.into(),
+            None => return Err(PublisherConversionError::NoExpiration),
+        };
+        let port: u16 = port32 as u16;
+        Ok(Self {
+            name,
+            host_name,
+            port,
+            subscriber_expiration_interval,
+        })
     }
 }
 

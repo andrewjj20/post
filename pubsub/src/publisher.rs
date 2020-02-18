@@ -2,7 +2,8 @@ use super::find_service;
 use super::framing;
 use super::framing::{Acknowledgement, Message, MessageCodec, Request};
 use super::{DataGram, Error, Generation, PublisherDesc, Result};
-use futures::{
+use futures::future::{FutureExt, TryFutureExt};
+use futures01::{
     future::{self, Future},
     Async, AsyncSink, Poll, Sink, StartSend, Stream,
 };
@@ -27,7 +28,7 @@ struct Subscriber {
 struct PublisherShared {
     subscribers: HashMap<SocketAddr, Subscriber>,
     is_active: bool,
-    subscriber_expiration: time::Duration,
+    subscriber_expiration_interval: time::Duration,
 }
 
 impl PublisherShared {
@@ -35,12 +36,12 @@ impl PublisherShared {
         let timestamp = time::SystemTime::now();
         let message =
             Message::Acknowledgement(Acknowledgement::Subscription(framing::Subscription {
-                timeout_interval: self.subscriber_expiration,
+                timeout_interval: self.subscriber_expiration_interval,
             }));
-        let expiration = timestamp + self.subscriber_expiration;
+        let expiration = timestamp + self.subscriber_expiration_interval;
         match self.subscribers.get_mut(&addr) {
             Some(v) => {
-                v.expiration = timestamp + self.subscriber_expiration;
+                v.expiration = timestamp + self.subscriber_expiration_interval;
                 debug!("Subscription Renewed {:?}", v);
             }
             None => {
@@ -161,13 +162,15 @@ fn publisher_registration(
                     timer::Delay::new(std::time::Instant::now() + interval)
                         .map_err(log_err)
                         .and_then(move |_| {
-                            let this_reg_info = Arc::clone(&fold_reg_info);
-                            find_service::publisher_register(&this_reg_info.0, &this_reg_info.1)
+                            let (uri, desc) = &*Arc::clone(&fold_reg_info);
+                            find_service::publisher_register(uri.clone(), desc.clone())
+                                .boxed()
+                                .compat()
                                 .map_err(log_err)
                         })
                         .then(move |result| {
                             future::ok(match result {
-                                Ok(resp) => ((), resp.response.expiration_interval / 2),
+                                Ok(resp) => ((), resp.expiration_interval / 2),
                                 Err(_) => ((), interval),
                             })
                         }),
@@ -185,24 +188,24 @@ impl Publisher {
         name: String,
         host_name: String,
         port: u16,
-        subscriber_expiration: time::Duration,
+        subscriber_expiration_interval: time::Duration,
         find_uri: String,
     ) -> Result<Publisher> {
         let desc = PublisherDesc {
             name,
             host_name,
             port,
-            subscriber_expiration,
+            subscriber_expiration_interval,
         };
         Publisher::from_description(desc, find_uri)
     }
 
     pub fn from_description(desc: PublisherDesc, find_uri: String) -> Result<Publisher> {
-        let subscriber_expiration = desc.subscriber_expiration;
+        let subscriber_expiration_interval = desc.subscriber_expiration_interval;
         let shared = Arc::new(Mutex::new(PublisherShared {
             subscribers: HashMap::new(),
             is_active: true,
-            subscriber_expiration,
+            subscriber_expiration_interval,
         }));
         let (udp_sink, udp_stream) =
             UdpFramed::new(desc.to_tokio_socket()?, MessageCodec {}).split();

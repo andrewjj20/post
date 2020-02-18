@@ -1,10 +1,10 @@
+extern crate tokio;
 use clap::{crate_authors, crate_version, App as ClApp, Arg, SubCommand};
-use futures::future::Future;
 use log::*;
 use pubsub::find_service;
-use tokio::prelude::*;
 
-fn main() {
+#[tokio::main]
+async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     let matches = ClApp::new("PubSubServerStatus")
@@ -25,41 +25,20 @@ fn main() {
 
     info!("Starting Request");
     match matches.subcommand() {
-        ("service", Some(_service_matches)) => tokio::run(
-            find_service::server_status(base_url)
-                .map_err(|err| err.to_string())
-                .and_then(|resp| {
-                    info!("response received");
-                    future::result(serde_json::to_string_pretty(&resp))
-                        .map_err(|err| err.to_string())
-                })
-                .then(|resp| {
-                    match resp {
-                        Err(e) => println!("Error: {}", e),
-                        Ok(json) => println!("{}", json),
-                    }
-                    future::ok::<(), ()>(())
-                }),
-        ),
-        ("publishers", Some(_publisers_matches)) => tokio::run(
-            find_service::get_descriptors(base_url)
-                .map_err(|err| err.to_string())
-                .and_then(|resp| {
-                    info!("response received");
-                    future::result(serde_json::to_string_pretty(&resp))
-                        .map_err(|err| err.to_string())
-                })
-                .then(|resp| {
-                    match resp {
-                        Err(e) => println!("Error: {}", e),
-                        Ok(json) => println!("{}", json),
-                    }
-                    future::ok::<(), ()>(())
-                }),
-        ),
+        ("service", Some(_service_matches)) => {
+            let status = find_service::server_status(base_url).await?;
+            info!("Status: {:?}", status);
+            Ok(())
+        }
+        ("publishers", Some(_publisers_matches)) => {
+            let descriptors = find_service::get_descriptors(base_url).await?;
+            info!("response received {:?}", descriptors);
+            Ok(())
+        }
         (_, None) => {
             println!("Subcommand not found");
+            Ok(())
         }
         _ => unreachable!(),
-    };
+    }
 }

@@ -1,6 +1,6 @@
 use super::framing::{Acknowledgement, BaseMsg, Message, MessageCodec, Request};
 use super::{DataGram, Error, Generation, PublisherDesc, Result, MAX_DATA_SIZE};
-use futures::{
+use futures01::{
     future::Future,
     stream::{self, SplitStream},
     Async, Poll, Sink, Stream,

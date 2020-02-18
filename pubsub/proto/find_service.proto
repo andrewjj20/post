@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package post;
+
+/** Current time in Seconds since January 1, 1970 - Unix Time
+  */
+message Time {
+  uint64 secs = 1;
+};
+
+message TimeInterval {
+  uint64 secs = 1;
+};
+
+message PublisherDesc {
+  string name = 1;
+  string host_name = 2;
+  uint32 port = 3;
+  TimeInterval subscriber_expiration_interval = 4;
+};
+
+message ConnectionInfo {
+  Time last_report = 1;
+  Time expiration= 2;
+}
+
+message Registration {
+  PublisherDesc publisher = 1;
+  ConnectionInfo info = 2;
+}
+
+message SearchResponse {
+  repeated Registration list = 3;
+}
+
+message RegistrationRequest {
+  PublisherDesc desc = 1;
+}
+
+message RegistrationResponse {
+  TimeInterval expiration_interval = 1;
+}
+
+message SearchRequest {
+  string name_regex = 1;
+}
+
+message StatusResponse {
+  uint64 count = 1;
+}
+
+message StatusRequest {
+};
+
+service FindMe {
+  rpc server_status(StatusRequest) returns (StatusResponse) {};
+  rpc publisher_register(RegistrationRequest) returns (RegistrationResponse) {};
+  rpc get_publishers(SearchRequest) returns (SearchResponse) {};
+}
