@@ -1,7 +1,7 @@
 [workspace]
 
 members = [
-  "pubsub",
-  "pubsub-meetup",
-  "pubsub-examples",
+  "lib",
+  "meetup",
+  "examples",
 ]
