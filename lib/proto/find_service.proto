@@ -53,7 +53,7 @@ message StatusRequest {
 };
 
 service FindMe {
-  rpc server_status(StatusRequest) returns (StatusResponse) {};
-  rpc publisher_register(RegistrationRequest) returns (RegistrationResponse) {};
-  rpc get_publishers(SearchRequest) returns (SearchResponse) {};
+  rpc ServerStatus(StatusRequest) returns (StatusResponse) {};
+  rpc PublisherRegister(RegistrationRequest) returns (RegistrationResponse) {};
+  rpc GetPublishers(SearchRequest) returns (SearchResponse) {};
 }

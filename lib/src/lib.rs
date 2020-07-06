@@ -1,5 +1,4 @@
-#[macro_use]
-extern crate futures01;
+#![feature(async_closure)]
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
@@ -15,9 +14,7 @@ use std::fmt;
 use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time;
-use tokio::net::UdpSocket;
-
-type SendError = tokio::sync::mpsc::error::SendError;
+use tokio::{net::UdpSocket, time as timer};
 
 #[derive(Debug)]
 pub enum Error {
@@ -25,8 +22,7 @@ pub enum Error {
     AddrParseError,
     IoError(io::Error),
     FramingError(framing::Error),
-    SendError(SendError),
-    TimerError(tokio::timer::Error),
+    TimerError(timer::Error),
 }
 
 type DataGram = (framing::Message, SocketAddr);
@@ -39,12 +35,13 @@ impl std::fmt::Display for Error {
             Error::Empty => write!(f, "Empty Error"),
             Error::IoError(e) => write!(f, "IO Error: {}", e),
             Error::FramingError(e) => write!(f, "Framing Error: {}", e),
-            Error::SendError(e) => write!(f, "Internal Stream Error: {}", e),
             Error::AddrParseError => write!(f, "Error Parsing Address"),
             Error::TimerError(e) => write!(f, "Error in tokio timer: {}", e),
         }
     }
 }
+
+impl std::error::Error for Error {}
 
 impl From<()> for Error {
     fn from(_err: ()) -> Error {
@@ -64,14 +61,8 @@ impl From<framing::Error> for Error {
     }
 }
 
-impl From<SendError> for Error {
-    fn from(err: SendError) -> Error {
-        Error::SendError(err)
-    }
-}
-
-impl From<tokio::timer::Error> for Error {
-    fn from(err: tokio::timer::Error) -> Error {
+impl From<timer::Error> for Error {
+    fn from(err: timer::Error) -> Error {
         Error::TimerError(err)
     }
 }
@@ -87,14 +78,14 @@ pub struct PublisherDesc {
 }
 
 impl PublisherDesc {
-    fn to_tokio_socket(&self) -> Result<UdpSocket> {
+    async fn to_tokio_socket(&self) -> Result<UdpSocket> {
         let addr = match self.to_socket_addrs()?.next() {
             Some(addr) => addr,
             None => {
                 return Err(Error::AddrParseError);
             }
         };
-        Ok(UdpSocket::bind(&addr)?)
+        Ok(UdpSocket::bind(&addr).await?)
     }
 }
 

@@ -1,21 +1,25 @@
 use super::framing::{Acknowledgement, BaseMsg, Message, MessageCodec, Request};
 use super::{DataGram, Error, Generation, PublisherDesc, Result, MAX_DATA_SIZE};
-use futures01::{
-    future::Future,
-    stream::{self, SplitStream},
-    Async, Poll, Sink, Stream,
+use futures::{
+    sink::SinkExt,
+    stream::{Stream, StreamExt},
+    FutureExt,
 };
 use std::collections::HashSet;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
-use std::time;
-use tokio::net::{UdpFramed, UdpSocket};
+use std::{
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs},
+    pin::Pin,
+    task::{Context, Poll},
+};
+use tokio::net::UdpSocket;
 use tokio::sync::mpsc::{self, Sender};
-use tokio::timer;
+use tokio::time as timer;
+use tokio_util::udp::UdpFramed;
 
 pub struct Subscription {
     desc: PublisherDesc,
     addr: SocketAddr,
-    inner_stream: SplitStream<UdpFramed<MessageCodec>>,
+    inner_stream: Pin<Box<dyn Stream<Item = Result<DataGram>>>>,
     sink: Sender<DataGram>,
     generation: Generation,
     current: Vec<u8>,
@@ -24,7 +28,7 @@ pub struct Subscription {
 }
 
 impl Subscription {
-    pub fn new(desc: PublisherDesc) -> Result<Subscription> {
+    pub async fn new(desc: PublisherDesc) -> Result<Subscription> {
         let addr = match desc.to_socket_addrs()?.next() {
             Some(a) => a,
             None => return Err(Error::AddrParseError),
@@ -38,47 +42,48 @@ impl Subscription {
             0,
         );
         let (udp_sink, udp_stream) =
-            UdpFramed::new(UdpSocket::bind(&bind_addr)?, MessageCodec {}).split();
+            UdpFramed::new(UdpSocket::bind(&bind_addr).await?, MessageCodec {}).split();
 
         let (sender, receiver) = mpsc::channel(10);
 
-        tokio::spawn(
-            stream::once::<DataGram, Error>(Ok((
-                Message::Request(Request::Subscribe(BaseMsg {})),
-                addr,
-            )))
-            .forward(sender.clone())
-            .map(|_| ())
-            .map_err(|_| ()),
-        );
+        {
+            let mut subscribe_sender = sender.clone();
+            tokio::spawn(async move {
+                subscribe_sender
+                    .send((Message::Request(Request::Subscribe(BaseMsg {})), addr))
+                    .await
+            });
+        }
 
         {
+            let mut pinned_sink = Box::pin(udp_sink);
             let addr_moveable = addr;
-            tokio::spawn(
-                receiver
-                    .map_err(|_| Error::Empty)
+            tokio::spawn(async move {
+                let ret = receiver
                     .map(|m| {
                         debug!("Sending Message");
-                        m
+                        Ok(m)
                     })
-                    .forward(udp_sink)
-                    .and_then(move |streams| {
-                        let (_, sink) = streams;
-                        sink.send((
-                            Message::Request(Request::Unsubscribe(BaseMsg {})),
-                            addr_moveable,
-                        ))
-                        .map(|_| ())
-                    })
-                    .map_err(|e| {
-                        error!("Sink Error {}", e);
-                    }),
-            );
+                    .forward(pinned_sink.as_mut())
+                    .await;
+
+                if let Err(err) = pinned_sink
+                    .send((
+                        Message::Request(Request::Unsubscribe(BaseMsg {})),
+                        addr_moveable,
+                    ))
+                    .await
+                {
+                    error!("Unable to send final unsubscribe: {}", err);
+                }
+
+                ret
+            });
         }
         Ok(Subscription {
             desc,
             addr,
-            inner_stream: udp_stream,
+            inner_stream: Box::pin(udp_stream),
             sink: sender,
             generation: 0,
             current: Vec::new(),
@@ -94,35 +99,39 @@ impl Subscription {
 
 impl Stream for Subscription {
     type Item = Vec<u8>;
-    type Error = Error;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        let pin = self.get_mut();
         loop {
-            let message = match try_ready!(self.inner_stream.poll()) {
-                Some(m) => m,
-                None => return Ok(Async::Ready(None)),
+            let message = match futures::ready!(pin.inner_stream.as_mut().poll_next(cx)) {
+                Some(Ok(m)) => m,
+                Some(Err(err)) => {
+                    error!("Error parsing message {}", err);
+                    continue;
+                }
+                None => continue,
             };
 
             debug!("message {:?}", message);
-            if message.1 == self.addr {
+            if message.1 == pin.addr {
                 match message.0 {
                     Message::Data(data) => {
-                        if data.generation > self.generation {
-                            self.generation = data.generation;
+                        if data.generation > pin.generation {
+                            pin.generation = data.generation;
                             let completed = data.complete_size;
-                            self.current.resize(completed, 0);
-                            self.chunks = completed / MAX_DATA_SIZE
+                            pin.current.resize(completed, 0);
+                            pin.chunks = completed / MAX_DATA_SIZE
                                 + if completed % MAX_DATA_SIZE == 0 { 0 } else { 1 };
-                            self.received_chunks.clear();
+                            pin.received_chunks.clear();
                         }
-                        if data.generation == self.generation {
-                            if self.received_chunks.insert(data.chunk) {
+                        if data.generation == pin.generation {
+                            if pin.received_chunks.insert(data.chunk) {
                                 let offset = data.chunk * MAX_DATA_SIZE;
-                                self.current.as_mut_slice()[offset..data.data.len()]
+                                pin.current.as_mut_slice()[offset..data.data.len()]
                                     .copy_from_slice(data.data.as_slice());
                             }
-                            if self.received_chunks.len() == self.chunks {
-                                return Ok(Async::Ready(Some(self.current.clone())));
+                            if pin.received_chunks.len() == pin.chunks {
+                                return Poll::Ready(Some(pin.current.clone()));
                             }
                         }
                     }
@@ -132,24 +141,21 @@ impl Stream for Subscription {
                             Acknowledgement::Subscription(sub) => {
                                 debug!("Subscription Ack: {}", sub);
                                 let timeout = sub.timeout_interval / 2;
-                                let sink = self.sink.clone();
-                                let addr = self.addr;
-                                let resub = timer::Delay::new(time::Instant::now() + timeout)
-                                    .map_err(Error::from)
-                                    .and_then(move |_| {
-                                        debug!("Sending Resubscription");
-                                        sink.send((
+                                let mut sink = pin.sink.clone();
+                                let addr = pin.addr;
+                                let resub = timer::delay_for(timeout).then(async move |_| {
+                                    debug!("Sending Resubscription");
+                                    match sink
+                                        .send((
                                             Message::Request(Request::Subscribe(BaseMsg {})),
                                             addr,
                                         ))
-                                        .map_err(Error::from)
-                                    })
-                                    .map(|_| {
-                                        debug!("Sent Resubscription");
-                                    })
-                                    .map_err(|e| {
-                                        error!("Issue sending resubscription: {}", e);
-                                    });
+                                        .await
+                                    {
+                                        Ok(()) => debug!("Sent Resubscription"),
+                                        Err(_) => error!("Out put pipe shut unexpectedly"),
+                                    };
+                                });
 
                                 tokio::spawn(resub);
                             }

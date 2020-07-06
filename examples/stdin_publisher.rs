@@ -1,12 +1,17 @@
-#[macro_use]
 extern crate log;
 
 use clap::{crate_authors, crate_version, App as ClApp, Arg};
+use futures::{
+    sink::SinkExt,
+    stream::{StreamExt, TryStreamExt},
+};
 use pubsub::publisher::Publisher;
+use std::error::Error as StdError;
 use std::time::Duration;
-use tokio::prelude::*;
+use tokio_util::codec;
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn StdError>> {
     env_logger::init();
 
     let matches = ClApp::new("stdin_publisher")
@@ -56,23 +61,18 @@ fn main() {
         .unwrap()
         .parse()
         .expect("invalid integer in port");
-    tokio::run(future::finished::<(), ()>(()).and_then(move |_| {
-        tokio_codec::FramedRead::new(tokio::io::stdin(), tokio_codec::LinesCodec::new())
-            .map_err(|e| pubsub::Error::from(e))
-            .map(|s| Vec::from(s))
-            .forward(
-                Publisher::new(
-                    name,
-                    host_name,
-                    port,
-                    Duration::new(subscriber_timeout, 0),
-                    url,
-                )
-                .unwrap(),
-            )
-            .map(|_| ())
-            .map_err(|e| {
-                error!("Error writing to publisher {}", e);
-            })
-    }));
+    let publisher = Publisher::new(
+        name,
+        host_name,
+        port,
+        Duration::new(subscriber_timeout, 0),
+        url,
+    )
+    .await?;
+    codec::FramedRead::new(tokio::io::stdin(), codec::LinesCodec::new())
+        .map_ok(Vec::<u8>::from)
+        .map_err(Box::<dyn StdError>::from)
+        .forward(publisher.sink_map_err(Box::<dyn StdError>::from))
+        .await?;
+    Ok(())
 }

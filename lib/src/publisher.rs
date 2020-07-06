@@ -2,22 +2,26 @@ use super::find_service;
 use super::framing;
 use super::framing::{Acknowledgement, Message, MessageCodec, Request};
 use super::{DataGram, Error, Generation, PublisherDesc, Result};
-use futures::future::{FutureExt, TryFutureExt};
-use futures01::{
-    future::{self, Future},
-    Async, AsyncSink, Poll, Sink, StartSend, Stream,
+use futures::{
+    future::TryFutureExt,
+    sink::Sink,
+    stream::{Stream, StreamExt},
 };
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time;
 use std::vec::Vec;
-use tokio::net::UdpFramed;
-use tokio::prelude::*;
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
 use tokio::sync::mpsc::{self, Sender};
-use tokio::timer;
+use tokio::{sync::Mutex, time as timer};
+use tokio_util::udp::UdpFramed;
 
 #[derive(Debug)]
 struct Subscriber {
@@ -45,10 +49,7 @@ impl PublisherShared {
                 debug!("Subscription Renewed {:?}", v);
             }
             None => {
-                let sub = Subscriber {
-                    addr: addr,
-                    expiration,
-                };
+                let sub = Subscriber { addr, expiration };
                 info!("Subscribe {:?}", sub);
                 self.subscribers.insert(addr, sub);
             }
@@ -75,53 +76,15 @@ impl PublisherShared {
 
 type ProtectedShared = Arc<Mutex<PublisherShared>>;
 
-pub struct Publisher {
-    shared: ProtectedShared,
-    sink: Sender<DataGram>,
-    generation: Generation,
-    current_send: Option<Vec<DataGram>>,
-    in_poll: bool,
-}
-
-struct PublisherInternal<T> {
-    protocol: T,
-    shared: ProtectedShared,
-}
-
-impl<T> PublisherInternal<T> {
-    fn new(protocol: T, shared: ProtectedShared) -> PublisherInternal<T> {
-        PublisherInternal { protocol, shared }
-    }
-
-    fn is_active(&self) -> bool {
-        self.shared.lock().unwrap().is_active
-    }
-}
-
-impl<T> Stream for PublisherInternal<T>
-where
-    T: Stream<Item = DataGram, Error = Error>,
-{
-    type Item = DataGram;
-    type Error = Error;
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        if self.is_active() {
-            self.protocol.poll()
-        } else {
-            Ok(Async::Ready(None))
-        }
-    }
-}
-
-fn handle_publisher_backend(
+async fn handle_publisher_backend(
     shared: Arc<Mutex<PublisherShared>>,
     incomming: DataGram,
 ) -> Option<DataGram> {
     debug!("Message received: {}", incomming.0);
     let ret = match incomming.0 {
         Message::Request(r) => match r {
-            Request::Subscribe(_) => shared.lock().unwrap().handle_subscription(incomming.1),
-            Request::Unsubscribe(_) => shared.lock().unwrap().handle_unsubscribe(&incomming.1),
+            Request::Subscribe(_) => shared.lock().await.handle_subscription(incomming.1),
+            Request::Unsubscribe(_) => shared.lock().await.handle_unsubscribe(&incomming.1),
         },
         Message::Data(_) => {
             error!("Data Message sent to publisher from {}", incomming.1);
@@ -148,43 +111,53 @@ where
     error!("Registration Error {}", e);
 }
 
+fn stop_stream_when_inactive<'a, T, I>(
+    stream: T,
+    shared: ProtectedShared,
+) -> impl Stream<Item = I> + 'a
+where
+    T: Stream<Item = I> + 'a,
+{
+    stream.take_while(move |_| {
+        let loc_shared = shared.clone();
+        async move { loc_shared.lock().await.is_active }
+    })
+}
+
 fn publisher_registration(
     desc: PublisherDesc,
     find_uri: String,
     shared: Arc<Mutex<PublisherShared>>,
 ) {
     let reg_info = Arc::new((find_uri, desc));
-    tokio::spawn(
-        stream::unfold(std::time::Duration::new(0, 0), move |interval| {
-            let fold_reg_info = Arc::clone(&reg_info);
-            if shared.lock().unwrap().is_active {
-                Some(
-                    timer::Delay::new(std::time::Instant::now() + interval)
-                        .map_err(log_err)
-                        .and_then(move |_| {
-                            let (uri, desc) = &*Arc::clone(&fold_reg_info);
-                            find_service::publisher_register(uri.clone(), desc.clone())
-                                .boxed()
-                                .compat()
-                                .map_err(log_err)
-                        })
-                        .then(move |result| {
-                            future::ok(match result {
-                                Ok(resp) => ((), resp.expiration_interval / 2),
-                                Err(_) => ((), interval),
-                            })
-                        }),
-                )
-            } else {
-                None
-            }
-        })
-        .for_each(|_| future::ok(())),
-    );
+    tokio::spawn(async move {
+        let interval = time::Duration::new(0, 0);
+        let fold_reg_info = Arc::clone(&reg_info);
+        timer::delay_for(interval).await;
+        if shared.lock().await.is_active {
+            let (uri, desc) = &*Arc::clone(&fold_reg_info);
+            let result = find_service::publisher_register(uri.clone(), desc.clone())
+                .map_err(log_err)
+                .await;
+            Some(match result {
+                Ok(resp) => ((), resp.expiration_interval / 2),
+                Err(_) => ((), interval),
+            })
+        } else {
+            None
+        }
+    });
+}
+
+pub struct Publisher {
+    shared: ProtectedShared,
+    sink: Sender<DataGram>,
+    generation: Generation,
+    in_poll: Option<Pin<Box<(dyn Future<Output = Result<()>>)>>>,
 }
 
 impl Publisher {
-    pub fn new(
+    pub async fn new(
         name: String,
         host_name: String,
         port: u16,
@@ -197,10 +170,10 @@ impl Publisher {
             port,
             subscriber_expiration_interval,
         };
-        Publisher::from_description(desc, find_uri)
+        Publisher::from_description(desc, find_uri).await
     }
 
-    pub fn from_description(desc: PublisherDesc, find_uri: String) -> Result<Publisher> {
+    pub async fn from_description(desc: PublisherDesc, find_uri: String) -> Result<Publisher> {
         let subscriber_expiration_interval = desc.subscriber_expiration_interval;
         let shared = Arc::new(Mutex::new(PublisherShared {
             subscribers: HashMap::new(),
@@ -208,28 +181,39 @@ impl Publisher {
             subscriber_expiration_interval,
         }));
         let (udp_sink, udp_stream) =
-            UdpFramed::new(desc.to_tokio_socket()?, MessageCodec {}).split();
+            UdpFramed::new(desc.to_tokio_socket().await?, MessageCodec {}).split();
         let (sink, stream) = mpsc::channel::<DataGram>(1);
 
-        let reserved_shared = Arc::clone(&shared);
-        tokio::spawn(
-            PublisherInternal::new(udp_stream, Arc::clone(&shared))
-                .filter_map(move |d| handle_publisher_backend(Arc::clone(&reserved_shared), d))
-                .forward(sink.clone())
-                .map_err(move |e| {
-                    error!("Stream Error {}", e);
-                })
-                .map(|_| ()),
-        );
-        tokio::spawn(
-            stream
-                .map_err(|_| Error::Empty)
-                .forward(udp_sink)
-                .map(|_| ())
-                .map_err(|e| {
-                    error!("Sink Error {}", e);
+        {
+            let reserved_shared = Arc::clone(&shared);
+            let backend_sink = sink.clone();
+            tokio::spawn(
+                stop_stream_when_inactive(
+                    udp_stream.filter_map(async move |r| match r {
+                        Err(e) => {
+                            error!("Stream Error {}", e);
+                            None
+                        }
+                        Ok(ret) => Some(ret),
+                    }),
+                    Arc::clone(&shared),
+                )
+                .for_each(move |incomming| {
+                    let shared = reserved_shared.clone();
+                    let mut sink = backend_sink.clone();
+                    async move {
+                        if let Some(msg) = handle_publisher_backend(shared, incomming).await {
+                            if sink.send(msg).await.is_err() {
+                                error!("Broken pipe when processing output");
+                            }
+                        };
+                    }
                 }),
-        );
+            );
+        }
+        tokio::spawn(stream.map(Ok).forward(udp_sink).map_err(|e| {
+            error!("Sink Error {}", e);
+        }));
 
         publisher_registration(desc, find_uri, Arc::clone(&shared));
 
@@ -237,101 +221,89 @@ impl Publisher {
             shared,
             sink,
             generation: 1,
-            current_send: None,
-            in_poll: false,
+            in_poll: None,
         })
     }
 
-    fn reset_stream(&mut self) {
-        self.in_poll = false;
-        self.current_send = None;
-    }
-
-    fn do_send(&mut self) -> Poll<(), Error> {
-        if self.in_poll {
-            let poll_result = self.sink.poll_complete();
-            if let Ok(a) = poll_result {
-                if let Async::Ready(_) = a {
-                    self.in_poll = false;
-                }
-            }
-            Ok(poll_result?)
+    fn do_send(&mut self, cx: &mut Context) -> Poll<Result<()>> {
+        let ret = if let Some(future) = self.in_poll.as_mut() {
+            future.as_mut().poll(cx)
         } else {
-            let current = self.current_send.as_mut().unwrap().pop().unwrap();
-            debug!("sending packet ({},{})", &current.0, &current.1);
-            match self.sink.start_send(current)? {
-                AsyncSink::Ready => {
-                    if self.current_send.as_mut().unwrap().is_empty() {
-                        self.current_send = None;
-                    }
-                    Ok(Async::Ready(()))
-                }
-                AsyncSink::NotReady(c) => {
-                    self.in_poll = true;
-                    self.current_send.as_mut().unwrap().push(c);
-                    Ok(Async::NotReady)
-                }
-            }
+            Poll::Ready(Ok(()))
+        };
+        if let Poll::Ready(_) = ret {
+            self.in_poll = None;
         }
+        ret
     }
 
-    fn do_send_loop(&mut self) -> Result<bool> {
-        while self.current_send.is_some() && !self.in_poll {
-            if let Async::NotReady = self.do_send()? {
-                return Ok(false);
+    fn flush(&mut self, cx: &mut Context) -> Poll<Result<()>> {
+        loop {
+            futures::ready!(self.do_send(cx))?;
+            if self.in_poll.is_none() {
+                return Poll::Ready(Ok(()));
             }
         }
-        Ok(!self.in_poll)
     }
 }
 
 impl Drop for Publisher {
     fn drop(&mut self) {
-        self.shared.lock().unwrap().is_active = false;
+        futures::executor::block_on(self.shared.lock()).is_active = false;
     }
 }
 
-impl Sink for Publisher {
-    type SinkItem = Vec<u8>;
-    type SinkError = Error;
+impl Sink<Vec<u8>> for Publisher {
+    type Error = Error;
 
-    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        if self.current_send.is_some() {
-            return Ok(AsyncSink::NotReady(item));
+    fn start_send(self: Pin<&mut Self>, item: Vec<u8>) -> Result<()> {
+        if self.in_poll.is_some() {
+            return Err(Error::from(std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "Started Send without ready",
+            )));
         }
+        let pin = self.get_mut();
 
         let timestamp = time::SystemTime::now();
-        {
-            let mut shared = self.shared.lock().unwrap();
-            shared.prune_stale_subscriptions(timestamp);
-            let dgrams = Vec::from_iter(
-                Message::split_data_msgs(item.as_slice(), self.generation)?
-                    .into_iter()
-                    .cartesian_product(shared.subscribers.values().map(|s| s.addr)),
-            );
-            if !dgrams.is_empty() {
-                self.current_send = Some(dgrams);
+        let generation = pin.generation;
+        let shared = pin.shared.clone();
+        let mut sink = pin.sink.clone();
+        pin.in_poll = Some(Box::pin(async move {
+            let dgrams = {
+                let mut shared = shared.lock().await;
+                shared.prune_stale_subscriptions(timestamp);
+                Vec::from_iter(
+                    Message::split_data_msgs(item.as_slice(), generation)?
+                        .into_iter()
+                        .cartesian_product(shared.subscribers.values().map(|s| s.addr)),
+                )
+            };
+            for dgram in dgrams {
+                sink.send(dgram).await.map_err(|_| {
+                    std::io::Error::new(std::io::ErrorKind::BrokenPipe, "Publisher pipe ended")
+                })?;
             }
-        }
+            Ok(())
+        }));
+        pin.generation += 1;
 
-        self.generation += 1;
-        self.do_send_loop()?;
-        Ok(AsyncSink::Ready)
+        Ok(())
     }
 
-    fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        loop {
-            try_ready!(match self.do_send() {
-                Err(e) => {
-                    self.reset_stream();
-                    Err(e)
-                }
-                Ok(a) => Ok(a),
-            });
-            if self.current_send.is_none() && !self.in_poll {
-                return Ok(Async::Ready(()));
-            }
-        }
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<()>> {
+        self.get_mut().flush(cx)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<()>> {
+        self.get_mut().flush(cx)
+    }
+
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<()>> {
+        let pin = self.get_mut();
+        let ret = pin.flush(cx);
+        futures::executor::block_on(pin.shared.lock()).is_active = false;
+        ret
     }
 }
 

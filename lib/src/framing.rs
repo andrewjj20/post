@@ -7,7 +7,7 @@ use std::fmt::Display;
 use std::result;
 use std::time::Duration;
 use std::vec::Vec;
-use tokio_codec::{Decoder, Encoder};
+use tokio_util::codec::{Decoder, Encoder};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BaseMsg {}
@@ -139,6 +139,7 @@ impl std::fmt::Display for Error {
         }
     }
 }
+impl std::error::Error for Error {}
 
 impl From<EncodeError> for Error {
     fn from(error: EncodeError) -> Error {
