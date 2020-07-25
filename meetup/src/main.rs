@@ -162,7 +162,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .long("bind")
                 .takes_value(true)
                 .required(true)
-                .validator(socket_validator),
+                .validator(socket_validator)
+                .help("IP and port to bind to in the form of <IP>:<Port>. Use 0.0.0.0 for any IP on the system."),
         )
         .arg(
             Arg::with_name("publisher-timeout")

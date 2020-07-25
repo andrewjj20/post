@@ -14,14 +14,13 @@ serde_derive = "1.0"
 serde_bytes = "0.10"
 clap = "2.32"
 byteorder = "1"
-hyper = "0.12"
 tokio = { version = "0.2", features = ["macros", "stream", "time", "rt-core","sync"] }
 tokio-util = { version = "0.2", features = ["udp","codec"] }
-tonic = "0.1.0-alpha"
+tonic = "^0.3"
 prost = "0.6"
 bytes = "0.5"
 rmp-serde = "0.13"
 itertools = "0.7.8"
 
 [build-dependencies]
-tonic-build = "0.1.0-alpha.6"
+tonic-build = "^0.3"
