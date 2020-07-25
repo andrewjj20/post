@@ -1,0 +1,17 @@
+[package]
+name = "tests"
+version = "0.0.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+pubsub = { version = "0.1.0", path = "../lib" }
+pubsub-meetup = { version = "0.1.0", path = "../meetup" }
+clap = "2.32"
+futures = { version = "0.3", features = ["compat"]}
+log = "0.4"
+env_logger = "0.5"
+tokio = { version = "0.2", features = ["macros", "stream", "time", "rt-core", "rt-threaded", "io-std", "process"] }
+tokio-util = { version = "0.2", features = ["udp","codec"] }
+cargo = "^0.45"
+lazy_static = "1.4"
