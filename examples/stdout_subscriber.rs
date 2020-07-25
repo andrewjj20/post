@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn StdError>> {
         )
         .get_matches();
 
-    let base_url = matches.value_of("url").unwrap().to_string();
+    let base_url = matches.value_of("url").unwrap();
     let desc = find_service::get_descriptors_for_name(base_url, "stdin".to_string())
         .await?
         .list

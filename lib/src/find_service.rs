@@ -5,7 +5,7 @@ use convert::{TryFrom, TryInto};
 use proto::find_me_client::FindMeClient;
 use std::fmt::Write;
 use std::{convert, error, fmt, result, time};
-use tonic::{Request, Status};
+use tonic::{Request, Status, transport};
 
 #[derive(Debug)]
 pub struct MissingFieldError {
@@ -47,10 +47,15 @@ impl TryInto<Status> for MissingFieldError {
     }
 }
 
+async fn uri_to_channel(base_uri: &str) -> Result<transport::Channel, Box<dyn std::error::Error>> {
+    transport::Endpoint::from_shared(base_uri.to_string())?
+        .connect().await.map_err(|e| e.into())
+}
+
 pub async fn server_status(
     base_uri: &str,
 ) -> Result<proto::StatusResponse, Box<dyn std::error::Error>> {
-    let mut client = FindMeClient::connect(base_uri.to_string()).await?;
+    let mut client = FindMeClient::new(uri_to_channel(base_uri).await?);
 
     let request = Request::new(proto::StatusRequest {});
 
@@ -59,10 +64,10 @@ pub async fn server_status(
 }
 
 pub async fn get_descriptors_for_name(
-    base_uri: String,
+    base_uri: &str,
     name: String,
 ) -> Result<proto::SearchResponse, Box<dyn std::error::Error>> {
-    let mut client = FindMeClient::connect(base_uri).await?;
+    let mut client = FindMeClient::new(uri_to_channel(base_uri).await?);
 
     let request = Request::new(proto::SearchRequest {
         name_regex: name.to_string(),
@@ -75,7 +80,7 @@ pub async fn get_descriptors_for_name(
 pub async fn get_descriptors(
     base_uri: &str,
 ) -> Result<proto::SearchResponse, Box<dyn std::error::Error>> {
-    let mut client = FindMeClient::connect(base_uri.to_string()).await?;
+    let mut client = FindMeClient::new(uri_to_channel(base_uri).await?);
 
     let request = Request::new(proto::SearchRequest {
         name_regex: "*".to_string(),
