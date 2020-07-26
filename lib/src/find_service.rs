@@ -5,7 +5,7 @@ use convert::{TryFrom, TryInto};
 use proto::find_me_client::FindMeClient;
 use std::fmt::Write;
 use std::{convert, error, fmt, result, time};
-use tonic::{Request, Status, transport};
+use tonic::{transport, Request, Status};
 
 #[derive(Debug)]
 pub struct MissingFieldError {
@@ -49,7 +49,9 @@ impl TryInto<Status> for MissingFieldError {
 
 async fn uri_to_channel(base_uri: &str) -> Result<transport::Channel, Box<dyn std::error::Error>> {
     transport::Endpoint::from_shared(base_uri.to_string())?
-        .connect().await.map_err(|e| e.into())
+        .connect()
+        .await
+        .map_err(|e| e.into())
 }
 
 pub async fn server_status(

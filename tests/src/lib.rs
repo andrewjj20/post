@@ -1,4 +1,3 @@
-
 //! Test utilities for pubsub
 
 #[macro_use]
@@ -29,15 +28,16 @@ impl CommonTestEnvironment {
             find: find::FindService::new(handle),
         }
     }
-    pub fn enter<F>(&self, f: F) -> F::Output 
-        where F: std::future::Future + Send + 'static,
+    pub fn enter<F>(&self, f: F) -> F::Output
+    where
+        F: std::future::Future + Send + 'static,
         F::Output: Send + 'static,
     {
         self.runtime.handle().block_on(f)
     }
 }
 
-impl Default for CommonTestEnvironment{
+impl Default for CommonTestEnvironment {
     fn default() -> CommonTestEnvironment {
         CommonTestEnvironment::new()
     }
@@ -45,7 +45,7 @@ impl Default for CommonTestEnvironment{
 
 lazy_static! {
     pub static ref COMMON_ENV: CommonTestEnvironment = {
-        eprintln!("path:{:?}",std::env::current_dir().unwrap());
+        eprintln!("path:{:?}", std::env::current_dir().unwrap());
         CommonTestEnvironment::new()
     };
 }
