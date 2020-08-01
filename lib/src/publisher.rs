@@ -36,6 +36,13 @@ struct PublisherShared {
 }
 
 impl PublisherShared {
+    fn new(is_active: bool, subscriber_expiration_interval: time::Duration) -> Self {
+        Self {
+            subscribers: HashMap::new(),
+            is_active,
+            subscriber_expiration_interval,
+        }
+    }
     fn handle_subscription(&mut self, addr: SocketAddr) -> Option<DataGram> {
         let timestamp = time::SystemTime::now();
         let message =
@@ -111,12 +118,12 @@ where
     error!("Registration Error {}", e);
 }
 
-fn stop_stream_when_inactive<'a, T, I>(
-    stream: T,
+fn stop_stream_when_inactive<'a, S, I>(
+    stream: S,
     shared: ProtectedShared,
 ) -> impl Stream<Item = I> + 'a
 where
-    T: Stream<Item = I> + 'a,
+    S: Stream<Item = I> + 'a,
 {
     stream.take_while(move |_| {
         let loc_shared = shared.clone();
@@ -163,23 +170,22 @@ impl Publisher {
         port: u16,
         subscriber_expiration_interval: time::Duration,
         find_uri: String,
-    ) -> Result<Publisher> {
+    ) -> Result<Self> {
         let desc = PublisherDesc {
             name,
             host_name,
             port,
             subscriber_expiration_interval,
         };
-        Publisher::from_description(desc, find_uri).await
+        Self::from_description(desc, find_uri).await
     }
 
-    pub async fn from_description(desc: PublisherDesc, find_uri: String) -> Result<Publisher> {
+    pub async fn from_description(desc: PublisherDesc, find_uri: String) -> Result<Self> {
         let subscriber_expiration_interval = desc.subscriber_expiration_interval;
-        let shared = Arc::new(Mutex::new(PublisherShared {
-            subscribers: HashMap::new(),
-            is_active: true,
+        let shared = Arc::new(Mutex::new(PublisherShared::new(
+            true,
             subscriber_expiration_interval,
-        }));
+        )));
         let (udp_sink, udp_stream) =
             UdpFramed::new(desc.to_tokio_socket().await?, MessageCodec {}).split();
         let (sink, stream) = mpsc::channel::<DataGram>(1);
@@ -217,7 +223,7 @@ impl Publisher {
 
         publisher_registration(desc, find_uri, Arc::clone(&shared));
 
-        Ok(Publisher {
+        Ok(Self {
             shared,
             sink,
             generation: 1,
@@ -253,10 +259,13 @@ impl Drop for Publisher {
     }
 }
 
-impl Sink<Vec<u8>> for Publisher {
+impl<Buf> Sink<Buf> for Publisher
+where
+    Buf: bytes::Buf,
+{
     type Error = Error;
 
-    fn start_send(self: Pin<&mut Self>, item: Vec<u8>) -> Result<()> {
+    fn start_send(self: Pin<&mut Self>, mut item: Buf) -> Result<()> {
         if self.in_poll.is_some() {
             return Err(Error::from(std::io::Error::new(
                 std::io::ErrorKind::WouldBlock,
@@ -269,13 +278,13 @@ impl Sink<Vec<u8>> for Publisher {
         let generation = pin.generation;
         let shared = pin.shared.clone();
         let mut sink = pin.sink.clone();
+        let msgs = Message::split_data_msgs(item.to_bytes(), generation)?;
         pin.in_poll = Some(Box::pin(async move {
             let dgrams = {
                 let mut shared = shared.lock().await;
                 shared.prune_stale_subscriptions(timestamp);
                 Vec::from_iter(
-                    Message::split_data_msgs(item.as_slice(), generation)?
-                        .into_iter()
+                    msgs.into_iter()
                         .cartesian_product(shared.subscribers.values().map(|s| s.addr)),
                 )
             };

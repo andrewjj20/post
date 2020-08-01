@@ -1,6 +1,6 @@
 use super::Error as PubSubError;
 use super::{Generation, MAX_DATA_SIZE};
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use rmp_serde as rmps;
 use rmp_serde::{decode::Error as DecodeError, encode::Error as EncodeError};
 use std::fmt::Display;
@@ -24,14 +24,14 @@ pub struct DataMsg {
     pub chunk: usize,
     pub complete_size: usize,
     #[serde(with = "serde_bytes")]
-    pub data: Vec<u8>,
+    pub data: Bytes,
 }
 
 impl Display for DataMsg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> result::Result<(), std::fmt::Error> {
         write!(
             f,
-            "Generation: {}, start: {}, len: {}, finished_len: {}",
+            "Generation: {}, chunk: {}, len: {}, finished_len: {}",
             self.generation,
             self.chunk,
             self.data.len(),
@@ -110,16 +110,21 @@ impl Message {
         Ok(rmps::to_vec(&self)?)
     }
 
-    pub fn split_data_msgs(buf: &[u8], generation: u64) -> result::Result<Vec<Message>, Error> {
-        let chunks = buf.chunks(MAX_DATA_SIZE);
+    pub fn split_data_msgs(mut buf: Bytes, generation: u64) -> result::Result<Vec<Message>, Error> {
         let mut ret: Vec<Message> = Vec::new();
-        for (i, chunk) in chunks.enumerate() {
-            ret.push(Message::Data(DataMsg {
+        let mut chunk = 0;
+        let total_len = buf.len();
+        while !buf.is_empty() {
+            let data = buf.split_to(std::cmp::min(buf.len(), MAX_DATA_SIZE));
+            let message = Message::Data(DataMsg {
                 generation,
-                chunk: i,
-                complete_size: buf.len(),
-                data: Vec::from(chunk),
-            }));
+                chunk,
+                complete_size: total_len,
+                data,
+            });
+            debug!("Queuing {}", message);
+            ret.push(message);
+            chunk += 1;
         }
         Ok(ret)
     }

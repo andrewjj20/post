@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn StdError>> {
         .try_into()
         .expect("Conversion from proto to regular description failed");
     let sub = Subscription::new(desc).await?;
-    sub.map(String::from_utf8)
+    sub.map(|b| String::from_utf8(std::convert::From::from(b.as_ref())))
         .map_err(Box::<dyn StdError>::from)
         .forward(
             codec::FramedWrite::new(tokio::io::stdout(), codec::LinesCodec::new())

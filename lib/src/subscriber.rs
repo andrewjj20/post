@@ -1,5 +1,6 @@
 use super::framing::{Acknowledgement, BaseMsg, Message, MessageCodec, Request};
 use super::{DataGram, Error, Generation, PublisherDesc, Result, MAX_DATA_SIZE};
+use bytes::{Bytes, BytesMut};
 use futures::{
     sink::SinkExt,
     stream::{Stream, StreamExt},
@@ -22,7 +23,7 @@ pub struct Subscription {
     inner_stream: Pin<Box<dyn Stream<Item = Result<DataGram>>>>,
     sink: Sender<DataGram>,
     generation: Generation,
-    current: Vec<u8>,
+    current: std::option::Option<BytesMut>,
     chunks: usize,
     received_chunks: HashSet<usize>,
 }
@@ -86,7 +87,7 @@ impl Subscription {
             inner_stream: Box::pin(udp_stream),
             sink: sender,
             generation: 0,
-            current: Vec::new(),
+            current: None,
             chunks: 0,
             received_chunks: HashSet::new(),
         })
@@ -98,7 +99,7 @@ impl Subscription {
 }
 
 impl Stream for Subscription {
-    type Item = Vec<u8>;
+    type Item = Bytes;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         let pin = self.get_mut();
@@ -119,19 +120,24 @@ impl Stream for Subscription {
                         if data.generation > pin.generation {
                             pin.generation = data.generation;
                             let completed = data.complete_size;
-                            pin.current.resize(completed, 0);
+                            let mut new_current = BytesMut::new();
+                            new_current.resize(completed, 0);
+                            pin.current.replace(new_current);
                             pin.chunks = completed / MAX_DATA_SIZE
                                 + if completed % MAX_DATA_SIZE == 0 { 0 } else { 1 };
                             pin.received_chunks.clear();
                         }
                         if data.generation == pin.generation {
-                            if pin.received_chunks.insert(data.chunk) {
-                                let offset = data.chunk * MAX_DATA_SIZE;
-                                pin.current.as_mut_slice()[offset..data.data.len()]
-                                    .copy_from_slice(data.data.as_slice());
+                            if let Some(current) = &mut pin.current {
+                                if pin.received_chunks.insert(data.chunk) {
+                                    let offset = data.chunk * MAX_DATA_SIZE;
+                                    current[offset..data.data.len()].copy_from_slice(&data.data);
+                                }
                             }
                             if pin.received_chunks.len() == pin.chunks {
-                                return Poll::Ready(Some(pin.current.clone()));
+                                if let Some(current) = pin.current.take() {
+                                    return Poll::Ready(Some(current.freeze()));
+                                }
                             }
                         }
                     }

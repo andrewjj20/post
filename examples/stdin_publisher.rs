@@ -70,9 +70,12 @@ async fn main() -> Result<(), Box<dyn StdError>> {
     )
     .await?;
     codec::FramedRead::new(tokio::io::stdin(), codec::LinesCodec::new())
-        .map_ok(Vec::<u8>::from)
+        .map_ok(|s| bytes::Bytes::from(s))
         .map_err(Box::<dyn StdError>::from)
-        .forward(publisher.sink_map_err(Box::<dyn StdError>::from))
+        .forward(SinkExt::<&[u8]>::sink_map_err(
+            publisher,
+            Box::<dyn StdError>::from,
+        ))
         .await?;
     Ok(())
 }
