@@ -271,12 +271,6 @@ where
     type Error = Error;
 
     fn start_send(self: Pin<&mut Self>, mut item: Buf) -> Result<()> {
-        if self.in_poll.is_some() {
-            return Err(Error::from(std::io::Error::new(
-                std::io::ErrorKind::WouldBlock,
-                "Started Send without ready",
-            )));
-        }
         let pin = self.get_mut();
 
         let timestamp = time::SystemTime::now();
@@ -284,7 +278,7 @@ where
         let shared = pin.shared.clone();
         let mut sink = pin.sink.clone();
         let msgs = Message::split_data_msgs(item.to_bytes(), generation)?;
-        pin.in_poll = Some(Box::pin(async move {
+        pin.in_poll.replace(Box::pin(async move {
             let dgrams = {
                 let mut shared = shared.lock().await;
                 shared.prune_stale_subscriptions(timestamp);
