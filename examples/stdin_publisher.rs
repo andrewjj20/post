@@ -49,6 +49,9 @@ async fn main() -> Result<(), Box<dyn StdError>> {
         .get_matches();
 
     let url = String::from(matches.value_of("url").unwrap());
+    let client = pubsub::find_service::Client::from_url(url)?
+        .connect()
+        .await?;
     let name = "stdin".to_string();
     let host_name = matches.value_of("host").unwrap().to_string();
     let port = matches

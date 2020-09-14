@@ -133,17 +133,19 @@ where
 
 fn publisher_registration(
     desc: PublisherDesc,
-    find_uri: String,
+    client: find_service::Client,
     shared: Arc<Mutex<PublisherShared>>,
 ) {
-    let reg_info = Arc::new((find_uri, desc));
+    let reg_info = Arc::new((client, desc));
     tokio::spawn(async move {
         let interval = time::Duration::new(0, 0);
         let fold_reg_info = Arc::clone(&reg_info);
         timer::delay_for(interval).await;
         if shared.lock().await.is_active {
-            let (uri, desc) = &*Arc::clone(&fold_reg_info);
-            let result = find_service::publisher_register(uri.clone(), desc.clone())
+            let (client, desc) = &*Arc::clone(&fold_reg_info);
+            let result = client
+                .clone()
+                .publisher_register(desc.clone())
                 .map_err(log_err)
                 .await;
             Some(match result {
@@ -169,7 +171,7 @@ impl Publisher {
         host_name: String,
         port: u16,
         subscriber_expiration_interval: time::Duration,
-        find_uri: String,
+        client: find_service::Client,
     ) -> Result<Self> {
         let desc = PublisherDesc {
             name,
@@ -177,10 +179,13 @@ impl Publisher {
             port,
             subscriber_expiration_interval,
         };
-        Self::from_description(desc, find_uri).await
+        Self::from_description(desc, client).await
     }
 
-    pub async fn from_description(desc: PublisherDesc, find_uri: String) -> Result<Self> {
+    pub async fn from_description(
+        desc: PublisherDesc,
+        client: find_service::Client,
+    ) -> Result<Self> {
         let subscriber_expiration_interval = desc.subscriber_expiration_interval;
         let shared = Arc::new(Mutex::new(PublisherShared::new(
             true,
@@ -221,7 +226,7 @@ impl Publisher {
             error!("Sink Error {}", e);
         }));
 
-        publisher_registration(desc, find_uri, Arc::clone(&shared));
+        publisher_registration(desc, client, Arc::clone(&shared));
 
         Ok(Self {
             shared,

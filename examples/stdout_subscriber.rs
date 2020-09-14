@@ -30,7 +30,11 @@ async fn main() -> Result<(), Box<dyn StdError>> {
         .get_matches();
 
     let base_url = matches.value_of("url").unwrap();
-    let desc = find_service::get_descriptors_for_name(base_url, "stdin".to_string())
+    let mut client = pubsub::find_service::Client::from_url(base_url)?
+        .connect()
+        .await?;
+    let desc = client
+        .get_descriptors_for_name("stdin".to_string())
         .await?
         .list
         .into_iter()

@@ -1,15 +1,38 @@
-use pubsub::find_service::proto;
-use std::error::Error;
+use pubsub::find_service::Client;
 
 ///Wraps an external find service process and provides easy access to its functions
 pub struct FindService {
     _proc: tokio::task::JoinHandle<std::result::Result<std::process::ExitStatus, std::io::Error>>,
     _handle: tokio::runtime::Handle,
-    url: &'static str,
+    client: pubsub::find_service::Client,
+}
+
+pub async fn retry_client(url: &'static str) -> pubsub::find_service::Client {
+    let retries = 10;
+    let mut retry = 0;
+
+    loop {
+        if retry >= retries {
+            panic!("Retries exceeded");
+        }
+        if let Ok(mut client) = pubsub::find_service::Client::from_url(url)
+            .unwrap()
+            .set_connect_timeout(std::time::Duration::from_secs(60))
+            .connect()
+            .await
+        {
+            info!("client works, checking status");
+            if client.server_status().await.is_ok() {
+                break client;
+            }
+        }
+        info!("Client retry");
+        retry += 1;
+    }
 }
 
 impl FindService {
-    pub fn new(_handle: tokio::runtime::Handle) -> FindService {
+    pub async fn new(_handle: tokio::runtime::Handle) -> FindService {
         let path = "../target/debug/pubsub-meetup";
         let url = "http://127.0.0.1:8080/";
         let bind = "127.0.0.1:8080";
@@ -31,20 +54,16 @@ impl FindService {
             ret
         });
 
+        let client = retry_client(url).await;
+
         FindService {
             _proc,
             _handle,
-            url,
+            client,
         }
     }
 
-    pub fn url(&self) -> &'static str {
-        self.url
-    }
-
-    pub async fn server_status(
-        &self,
-    ) -> std::result::Result<proto::StatusResponse, Box<dyn Error>> {
-        pubsub::find_service::server_status(&self.url).await
+    pub fn client(&self) -> Client {
+        self.client.clone()
     }
 }

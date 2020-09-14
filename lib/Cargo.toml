@@ -21,6 +21,7 @@ prost = "0.6"
 bytes = "0.5"
 rmp-serde = "0.13"
 itertools = "0.8"
+hyper = "^0.13.4"
 
 [build-dependencies]
 tonic-build = "^0.3"
