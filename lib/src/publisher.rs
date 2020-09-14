@@ -305,15 +305,24 @@ where
         Ok(())
     }
 
-    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<()>> {
+    fn poll_ready(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+    ) -> Poll<std::result::Result<(), Self::Error>> {
         self.get_mut().flush(cx)
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<()>> {
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+    ) -> Poll<std::result::Result<(), Self::Error>> {
         self.get_mut().flush(cx)
     }
 
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<()>> {
+    fn poll_close(
+        self: Pin<&mut Self>,
+        cx: &mut Context,
+    ) -> Poll<std::result::Result<(), Self::Error>> {
         let pin = self.get_mut();
         let ret = pin.flush(cx);
         futures::executor::block_on(pin.shared.lock()).is_active = false;

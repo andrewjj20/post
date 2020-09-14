@@ -69,11 +69,11 @@ async fn main() -> Result<(), Box<dyn StdError>> {
         host_name,
         port,
         Duration::new(subscriber_timeout, 0),
-        url,
+        client,
     )
     .await?;
     codec::FramedRead::new(tokio::io::stdin(), codec::LinesCodec::new())
-        .map_ok(|s| bytes::Bytes::from(s))
+        .map_ok(bytes::Bytes::from)
         .map_err(Box::<dyn StdError>::from)
         .forward(SinkExt::<&[u8]>::sink_map_err(
             publisher,

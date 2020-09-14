@@ -21,17 +21,20 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .subcommand(SubCommand::with_name("publishers").about("Displays a list of publishers"))
         .get_matches();
 
-    let base_url = matches.value_of("url").unwrap();
+    let base_url = matches
+        .value_of("url")
+        .ok_or_else(|| eyre::Report::msg("No URL provided"))?;
+    let mut client = find_service::Client::from_url(base_url)?.connect().await?;
 
     info!("Starting Request");
     match matches.subcommand() {
         ("service", Some(_service_matches)) => {
-            let status = find_service::server_status(base_url).await?;
+            let status = client.server_status().await?;
             info!("Status: {:?}", status);
             Ok(())
         }
         ("publishers", Some(_publisers_matches)) => {
-            let descriptors = find_service::get_descriptors(base_url).await?;
+            let descriptors = client.get_descriptors().await?;
             info!("response received {:?}", descriptors);
             Ok(())
         }

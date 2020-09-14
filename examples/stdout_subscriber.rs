@@ -47,9 +47,9 @@ async fn main() -> Result<(), Box<dyn StdError>> {
     let sub = Subscription::new(desc).await?;
     sub.map(|b| String::from_utf8(std::convert::From::from(b.as_ref())))
         .map_err(Box::<dyn StdError>::from)
-        .forward(
-            codec::FramedWrite::new(tokio::io::stdout(), codec::LinesCodec::new())
-                .sink_map_err(Box::<dyn StdError>::from),
-        )
+        .forward(SinkExt::<String>::sink_map_err(
+            codec::FramedWrite::new(tokio::io::stdout(), codec::LinesCodec::new()),
+            Box::<dyn StdError>::from,
+        ))
         .await
 }
