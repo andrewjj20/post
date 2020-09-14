@@ -6,6 +6,7 @@ extern crate log;
 extern crate lazy_static;
 
 pub mod find;
+pub mod verify;
 
 /// tools that should be independent of any test and can be shared
 /// The tokio runtime is an example.
@@ -23,15 +24,14 @@ impl CommonTestEnvironment {
             .build()
             .expect("Unable to start runtime");
         let handle = runtime.handle().clone();
-        CommonTestEnvironment {
-            runtime,
-            find: find::FindService::new(handle),
-        }
+        let find = runtime
+            .handle()
+            .block_on(async { find::FindService::new(handle).await });
+        CommonTestEnvironment { runtime, find }
     }
     pub fn enter<F>(&self, f: F) -> F::Output
     where
-        F: std::future::Future + Send + 'static,
-        F::Output: Send + 'static,
+        F: std::future::Future,
     {
         self.runtime.handle().block_on(f)
     }
@@ -45,6 +45,7 @@ impl Default for CommonTestEnvironment {
 
 lazy_static! {
     pub static ref COMMON_ENV: CommonTestEnvironment = {
+        env_logger::init();
         eprintln!("path:{:?}", std::env::current_dir().unwrap());
         CommonTestEnvironment::new()
     };
