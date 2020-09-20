@@ -1,11 +1,7 @@
 #[macro_use]
 extern crate log;
 
-use futures::{
-    future::{FutureExt, TryFutureExt},
-    sink::SinkExt,
-    stream::StreamExt,
-};
+use futures::{sink::SinkExt, stream::StreamExt, TryFutureExt};
 use std::sync::Arc;
 use tests::verify::{self, VerificationStatus, Verifier};
 use tests::COMMON_ENV;
@@ -78,7 +74,7 @@ fn publisher_subscriber_basics() {
                 )),
             }
         })
-        .map_err(|e| GeneralError::from(e));
+        .map_err(GeneralError::from);
 
         let send_one = async {
             let message = send_verifier.create_message();
@@ -86,7 +82,7 @@ fn publisher_subscriber_basics() {
             debug!("sent");
             ret
         }
-        .map_err(|e| GeneralError::from(e));
+        .map_err(GeneralError::from);
 
         let (send_result, receive_result) = futures::future::join(send_one, receive_one).await;
 

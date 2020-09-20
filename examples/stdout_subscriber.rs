@@ -7,7 +7,6 @@ use futures::{
     sink::SinkExt,
     stream::{StreamExt, TryStreamExt},
 };
-use pubsub::find_service;
 use pubsub::subscriber::Subscription;
 use std::convert::TryInto;
 use std::error::Error as StdError;

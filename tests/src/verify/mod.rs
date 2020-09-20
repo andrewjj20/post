@@ -1,5 +1,5 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use futures::{sink::Sink, stream::Stream};
+use futures::stream::Stream;
 
 use std::option::Option;
 use std::pin::Pin;

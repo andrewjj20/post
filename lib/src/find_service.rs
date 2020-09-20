@@ -1,7 +1,6 @@
 pub mod proto;
 
-use super::{PublisherDesc, Result as PubSubResult};
-use bytes::Bytes;
+use super::PublisherDesc;
 use convert::{TryFrom, TryInto};
 use proto::find_me_client::FindMeClient;
 use std::fmt::Write;
@@ -33,11 +32,7 @@ impl fmt::Display for MissingFieldError {
     }
 }
 
-impl error::Error for MissingFieldError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        None
-    }
-}
+impl error::Error for MissingFieldError {}
 
 impl TryInto<Status> for MissingFieldError {
     type Error = fmt::Error;

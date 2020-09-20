@@ -20,11 +20,7 @@ impl fmt::Display for TimeError {
     }
 }
 
-impl Error for TimeError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-}
+impl Error for TimeError {}
 
 impl convert::TryInto<SystemTime> for Time {
     type Error = TimeError;

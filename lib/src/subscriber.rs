@@ -156,7 +156,7 @@ impl Subscription {
                             if let Some(current) = &mut self.current {
                                 if self.received_chunks.insert(data.chunk) {
                                     let offset = data.chunk * MAX_DATA_SIZE;
-                                    debug!("current length is: {}",current.len());
+                                    debug!("current length is: {}", current.len());
                                     current[offset..data.data.len()].copy_from_slice(&data.data);
                                 }
                             }
