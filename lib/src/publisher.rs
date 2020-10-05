@@ -168,7 +168,7 @@ fn publisher_registration(
 
 /// Handles the distribution of messages to [Subscribers](super::subscriber::Subscription).
 ///
-/// Any time after creation, a publisher can start to send messages using it's
+/// Any time after creation, a publisher can start to send messages using its
 /// [Sink](futures::sink::Sink) implementation.
 pub struct Publisher {
     shared: ProtectedShared,
