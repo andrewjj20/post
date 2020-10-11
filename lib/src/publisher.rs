@@ -25,7 +25,7 @@ use tokio_util::udp::UdpFramed;
 
 #[derive(Debug)]
 
-/// Structure to tack a [Subscription](super::subscriber::Subscription)
+/// Tracking information for [Subscriptions](super::subscriber::Subscription)
 struct Subscriber {
     addr: SocketAddr,
     expiration: time::SystemTime,
