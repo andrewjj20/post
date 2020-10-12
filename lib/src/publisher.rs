@@ -24,11 +24,17 @@ use tokio::{sync::Mutex, time as timer};
 use tokio_util::udp::UdpFramed;
 
 #[derive(Debug)]
+
+/// Tracking information for [Subscriptions](super::subscriber::Subscription)
 struct Subscriber {
     addr: SocketAddr,
     expiration: time::SystemTime,
 }
 
+/// [Publisher] state shared with a background management task
+///
+/// This is used by the [Publisher] and separate future managing background
+/// [Subscription](super::subscriber::Subscription) management.
 struct PublisherShared {
     subscribers: HashMap<SocketAddr, Subscriber>,
     is_active: bool,
@@ -81,8 +87,10 @@ impl PublisherShared {
     }
 }
 
+/// The final type of PublishShared to ensure it is protected.
 type ProtectedShared = Arc<Mutex<PublisherShared>>;
 
+/// Handle the background management of a Publisher.
 async fn handle_publisher_backend(
     shared: Arc<Mutex<PublisherShared>>,
     incomming: DataGram,
@@ -158,6 +166,10 @@ fn publisher_registration(
     });
 }
 
+/// Handles the distribution of messages to [Subscribers](super::subscriber::Subscription).
+///
+/// Any time after creation, a publisher can start to send messages using its
+/// [Sink](futures::sink::Sink) implementation.
 pub struct Publisher {
     shared: ProtectedShared,
     sink: Sender<DataGram>,
@@ -166,22 +178,10 @@ pub struct Publisher {
 }
 
 impl Publisher {
-    pub async fn new(
-        name: String,
-        host_name: String,
-        port: u16,
-        subscriber_expiration_interval: time::Duration,
-        client: find_service::Client,
-    ) -> Result<Self> {
-        let desc = PublisherDesc {
-            name,
-            host_name,
-            port,
-            subscriber_expiration_interval,
-        };
-        Self::from_description(desc, client).await
-    }
-
+    /// Create a new [Publisher] without a description
+    ///
+    /// The [Publisher] will have been registered with the provided [find_service::Client] and be
+    /// ready to start sending messages.
     pub async fn from_description(
         desc: PublisherDesc,
         client: find_service::Client,
@@ -259,6 +259,7 @@ impl Publisher {
 }
 
 impl Drop for Publisher {
+    /// Ensure messages are cleaned up on drop
     fn drop(&mut self) {
         futures::executor::block_on(self.shared.lock()).is_active = false;
     }

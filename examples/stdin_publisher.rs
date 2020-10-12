@@ -5,7 +5,7 @@ use futures::{
     sink::SinkExt,
     stream::{StreamExt, TryStreamExt},
 };
-use pubsub::publisher::Publisher;
+use pubsub::{PublisherDesc, publisher::Publisher};
 use std::error::Error as StdError;
 use std::time::Duration;
 use tokio_util::codec;
@@ -64,11 +64,12 @@ async fn main() -> Result<(), Box<dyn StdError>> {
         .unwrap()
         .parse()
         .expect("invalid integer in port");
-    let publisher = Publisher::new(
-        name,
-        host_name,
-        port,
-        Duration::new(subscriber_timeout, 0),
+    let publisher = Publisher::from_description(
+        PublisherDesc {
+            name,
+            host_name,
+            port,
+            subscriber_expiration_interval: Duration::new(subscriber_timeout, 0),},
         client,
     )
     .await?;
