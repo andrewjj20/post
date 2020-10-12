@@ -54,7 +54,7 @@ async fn publisher_subscriber_basics() {
     println!("yeeters");
     debug!("publisher and subscriber initialized");
 
-    subscriber.wait_for_subscrition_complete().await;
+    subscriber.wait_for_subscription_complete().await;
 
     debug!("Subscription active");
 

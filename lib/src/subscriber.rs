@@ -17,7 +17,7 @@ use tokio::sync::mpsc::{self, Sender};
 use tokio::time as timer;
 use tokio_util::udp::UdpFramed;
 
-/// Future that comletes when the subscription has been acknoledge to the subscriber.
+/// Future that completes when the subscription has been acknowledge to the subscriber.
 pub struct SubscriptionComplete<'a> {
     inner: &'a mut Subscription,
 }
@@ -39,6 +39,17 @@ impl<'a> std::future::Future for SubscriptionComplete<'a> {
     }
 }
 
+/// Stream of messages from [Publishers](super::publisher::Publisher)
+///
+/// The new function starts the process of subscribing to a publisher. A message could arrive at
+/// any point after the call completes. [Subscription::wait_for_subscription_complete] can be used to listen
+/// for the subscription acknowledgement.
+///
+/// All inbound messages are handled during the stream poll. This can mean that a subscriber not
+/// handling messages can be deemed in active and it's subscription ended.
+///
+/// The primary means of interacting with a [Subscription] is through the [futures::stream::Stream]
+/// impl.
 pub struct Subscription {
     desc: PublisherDesc,
     addr: SocketAddr,
@@ -117,14 +128,19 @@ impl Subscription {
         })
     }
 
+    /// Returns the description used to create the Subscription
     pub fn description(&self) -> &PublisherDesc {
         &self.desc
     }
 
-    pub fn wait_for_subscrition_complete(&mut self) -> SubscriptionComplete {
+    /// Returns a future that completes when the subscription has been acknowledged by the
+    /// publisher.
+    pub fn wait_for_subscription_complete(&mut self) -> SubscriptionComplete {
         SubscriptionComplete { inner: self }
     }
 
+    /// Centralized message handling function. This works with the Stream impl and Completion
+    /// future.
     fn handle_message(&mut self, cx: &mut Context) -> Poll<()> {
         loop {
             debug!("Receive one message");
