@@ -67,9 +67,9 @@ message StatusRequest {
 };
 
 service FindMe {
-  /*Retrieve status information about the Meetme Service*/
+  /*Retrieve status information about the Meetup Service*/
   rpc ServerStatus(StatusRequest) returns (StatusResponse) {};
-  /*Register a publisher with the Meetme Service*/
+  /*Register a publisher with the Meetup Service*/
   rpc PublisherRegister(RegistrationRequest) returns (RegistrationResponse) {};
   /*Retreive a list of publishers matching given parameters*/
   rpc GetPublishers(SearchRequest) returns (SearchResponse) {};

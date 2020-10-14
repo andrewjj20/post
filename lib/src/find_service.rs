@@ -1,4 +1,4 @@
-/// The find service protobuf back end. Use this when writing a Meetme service.
+/// The find service protobuf back end. Use this when writing a Meetup service.
 pub mod proto;
 
 use super::PublisherDesc;
@@ -81,7 +81,7 @@ use tonic::transport::Uri;
 
 use std::result::Result;
 
-/// Generic error when connecting to a Meetme service.
+/// Generic error when connecting to a Meetup service.
 #[derive(Debug)]
 pub struct ClientConnectError {
     inner: tonic::transport::Error,
@@ -114,13 +114,13 @@ impl ClientBuilder {
         })
     }
 
-    /// Set the timeout on connecting to the Meetme service
+    /// Set the timeout on connecting to the Meetup service
     pub fn set_connect_timeout(mut self, timeout: time::Duration) -> Self {
         self.connect_timeout.replace(timeout);
         self
     }
 
-    /// Connect to the specified Meetme service.
+    /// Connect to the specified Meetup service.
     ///
     /// This async function completes when the connection is has been made or a fatal error has
     /// occurred.
@@ -133,7 +133,7 @@ impl ClientBuilder {
             inner: FindMeClient::new(channel),
         })
     }
-    /// Connect to the Meetme service asynchronously
+    /// Connect to the Meetup service asynchronously
     pub fn connect_lazy(self) -> Result<Client, ClientConnectError> {
         Ok(Client {
             inner: FindMeClient::new(self.endpoint.connect_lazy()?),
@@ -141,7 +141,7 @@ impl ClientBuilder {
     }
 }
 
-/// Higher level wrapper for errors occurring when communicating with a Meetme service.
+/// Higher level wrapper for errors occurring when communicating with a Meetup service.
 #[derive(Debug)]
 pub enum ClientError {
     ProtocolError(Status),
@@ -173,7 +173,7 @@ impl std::convert::From<MissingFieldError> for ClientError {
     }
 }
 
-/// Meetme service client. This client uses [proto] to implement a more convenient front end.
+/// Meetup service client. This client uses [proto] to implement a more convenient front end.
 #[derive(Clone, Debug)]
 pub struct Client {
     inner: FindMeClient<transport::Channel>,
@@ -189,7 +189,7 @@ impl Client {
         ClientBuilder::from_url(s)
     }
 
-    /// Retrieve status information from the connected Meetme service.
+    /// Retrieve status information from the connected Meetup service.
     pub async fn server_status(&mut self) -> Result<proto::StatusResponse, ClientError> {
         let request = Request::new(proto::StatusRequest {});
 
@@ -197,7 +197,7 @@ impl Client {
         Ok(response.into_inner())
     }
 
-    /// Retrieve publisher descriptors matching a name from the connected Meetme service.
+    /// Retrieve publisher descriptors matching a name from the connected Meetup service.
     pub async fn get_descriptors_for_name(
         &mut self,
         name: String,
@@ -210,7 +210,7 @@ impl Client {
         Ok(response.into_inner())
     }
 
-    /// Retrieve all publisher descriptors from the connected Meetme service.
+    /// Retrieve all publisher descriptors from the connected Meetup service.
     pub async fn get_descriptors(&mut self) -> Result<proto::SearchResponse, ClientError> {
         let request = Request::new(proto::SearchRequest {
             name_regex: "*".to_string(),
@@ -220,7 +220,7 @@ impl Client {
         Ok(response.into_inner())
     }
 
-    /// Register a publisher with the connected Meetme service.
+    /// Register a publisher with the connected Meetup service.
     pub async fn publisher_register(
         &mut self,
         publisher: PublisherDesc,
