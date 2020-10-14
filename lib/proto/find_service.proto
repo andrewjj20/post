@@ -2,58 +2,75 @@ syntax = "proto3";
 
 package post;
 
-/** Current time in Seconds since January 1, 1970 - Unix Time
+/*Current time in Seconds since January 1, 1970 - Unix Time
   */
 message Time {
   uint64 secs = 1;
 };
 
+/*A length of time
+  */
 message TimeInterval {
   uint64 secs = 1;
 };
-
+/*Description of a Publisher*/
 message PublisherDesc {
+  /*human readable identifier*/
   string name = 1;
+  /*Hostname containing the publisher*/
   string host_name = 2;
+  /*Port used by this publisher*/
   uint32 port = 3;
+  /*length of time a given subscription lasts before expiring*/
   TimeInterval subscriber_expiration_interval = 4;
 };
 
+/*Meetup service information on a publisher*/
 message ConnectionInfo {
   Time last_report = 1;
   Time expiration= 2;
 }
 
+/*Complete publisher information*/
 message Registration {
   PublisherDesc publisher = 1;
   ConnectionInfo info = 2;
 }
 
+/*Result of a search operation*/
 message SearchResponse {
   repeated Registration list = 3;
 }
 
+/*Complete request to register a publisher*/
 message RegistrationRequest {
   PublisherDesc desc = 1;
 }
 
+/*Response to a successfully registered publisher*/
 message RegistrationResponse {
   TimeInterval expiration_interval = 1;
 }
 
+/*Search parameters for locating a publisher*/
 message SearchRequest {
   string name_regex = 1;
 }
 
+/*Server Status information*/
 message StatusResponse {
   uint64 count = 1;
 }
 
+/*parameters for a status request*/
 message StatusRequest {
 };
 
 service FindMe {
+  /*Retrieve status information about the Meetme Service*/
   rpc ServerStatus(StatusRequest) returns (StatusResponse) {};
+  /*Register a publisher with the Meetme Service*/
   rpc PublisherRegister(RegistrationRequest) returns (RegistrationResponse) {};
+  /*Retreive a list of publishers matching given parameters*/
   rpc GetPublishers(SearchRequest) returns (SearchResponse) {};
 }
