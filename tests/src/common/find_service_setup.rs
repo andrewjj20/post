@@ -33,7 +33,7 @@ pub async fn retry_client(url: &'static str) -> pubsub::find_service::Client {
 
 impl FindService {
     pub async fn new() -> FindService {
-        info!("Starting new meetme service");
+        info!("Starting new meetup service");
         let path = "../target/debug/pubsub-meetup";
         let url = "http://127.0.0.1:8080/";
         let bind = "127.0.0.1:8080";
@@ -45,9 +45,9 @@ impl FindService {
             .spawn()
             .expect("Failed to start meetup");
 
-        info!("meetme service started");
+        info!("meetup service started");
         //tokio::runtime::Handle::current().block_on(tokio::time::delay_for(std::time::Duration::from_secs(1)));
-        //info!("meetme service started");
+        //info!("meetup service started");
 
         let client = retry_client(url).await;
 

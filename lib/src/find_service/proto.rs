@@ -5,8 +5,10 @@ use std::error::Error;
 use std::fmt;
 use std::time::*;
 
+/// An error that can occur when converting [Time] to [SystemTime]
 #[derive(Debug)]
 pub struct TimeError {
+    /// The time struct that caused the error.
     pub time: Time,
 }
 
