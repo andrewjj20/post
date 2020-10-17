@@ -4,6 +4,14 @@ version = "0.1.0"
 publish = false
 edition = "2018"
 
+[lib]
+name = "meetup_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "meetup"
+path = "src/main.rs"
+
 [dependencies]
 bytes = "0.5"
 post = { version = "0.1.0", path = "../lib" }
