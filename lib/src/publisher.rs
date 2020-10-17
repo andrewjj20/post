@@ -236,22 +236,12 @@ impl Publisher {
         })
     }
 
-    fn do_send(&mut self, cx: &mut Context) -> Poll<Result<()>> {
-        let ret = if let Some(future) = self.in_poll.as_mut() {
-            future.as_mut().poll(cx)
-        } else {
-            Poll::Ready(Ok(()))
-        };
-        if let Poll::Ready(_) = ret {
-            self.in_poll = None;
-        }
-        ret
-    }
-
     fn flush(&mut self, cx: &mut Context) -> Poll<Result<()>> {
         loop {
-            futures::ready!(self.do_send(cx))?;
-            if self.in_poll.is_none() {
+            if let Some(future) = self.in_poll.as_mut() {
+                futures::ready!(future.as_mut().poll(cx));
+                self.in_poll.take();
+            } else {
                 return Poll::Ready(Ok(()));
             }
         }
