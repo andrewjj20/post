@@ -1,7 +1,7 @@
 extern crate tokio;
 use clap::{crate_authors, crate_version, App as ClApp, Arg, SubCommand};
 use log::*;
-use pubsub::find_service;
+use post::find_service;
 
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {

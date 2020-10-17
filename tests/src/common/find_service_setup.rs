@@ -1,12 +1,12 @@
-use pubsub::find_service::Client;
+use post::find_service::Client;
 
 ///Wraps an external find service process and provides easy access to its functions
 pub struct FindService {
     _proc: tokio::process::Child,
-    client: pubsub::find_service::Client,
+    client: post::find_service::Client,
 }
 
-pub async fn retry_client(url: &'static str) -> pubsub::find_service::Client {
+pub async fn retry_client(url: &'static str) -> post::find_service::Client {
     let retries: i32 = 10;
     let mut retry: i32 = 0;
 
@@ -14,7 +14,7 @@ pub async fn retry_client(url: &'static str) -> pubsub::find_service::Client {
         if retry >= retries {
             panic!("Retries exceeded");
         }
-        if let Ok(mut client) = pubsub::find_service::Client::from_url(url)
+        if let Ok(mut client) = post::find_service::Client::from_url(url)
             .unwrap()
             .set_connect_timeout(std::time::Duration::from_secs(60))
             .connect()
@@ -34,7 +34,7 @@ pub async fn retry_client(url: &'static str) -> pubsub::find_service::Client {
 impl FindService {
     pub async fn new() -> FindService {
         info!("Starting new meetup service");
-        let path = "../target/debug/pubsub-meetup";
+        let path = "../target/debug/post-meetup";
         let url = "http://127.0.0.1:8080/";
         let bind = "127.0.0.1:8080";
 

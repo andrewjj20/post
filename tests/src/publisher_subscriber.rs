@@ -32,7 +32,7 @@ async fn publisher_subscriber_basics() {
         .await
         .expect("Service status should not return error");
 
-    let desc = pubsub::PublisherDesc {
+    let desc = post::PublisherDesc {
         name: "basic".to_string(),
         host_name: "127.0.0.1".to_string(),
         port: 5000,
@@ -43,11 +43,11 @@ async fn publisher_subscriber_basics() {
     let send_verifier = verifier.clone();
     let receive_verifier = verifier.clone();
 
-    let mut publisher = pubsub::publisher::Publisher::from_description(desc.clone(), client)
+    let mut publisher = post::publisher::Publisher::from_description(desc.clone(), client)
         .await
         .expect("Unable to create Publisher");
 
-    let mut subscriber = pubsub::subscriber::Subscription::new(desc.clone())
+    let mut subscriber = post::subscriber::Subscription::new(desc.clone())
         .await
         .expect("Unable to create Subscription");
 

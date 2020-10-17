@@ -1,5 +1,5 @@
 [package]
-name = "pubsub"
+name = "post"
 version = "0.1.0"
 authors = ["Joshua Job <josh@joshjob.com>"]
 edition = '2018'

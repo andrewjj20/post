@@ -7,7 +7,7 @@ use futures::{
     sink::SinkExt,
     stream::{StreamExt, TryStreamExt},
 };
-use pubsub::subscriber::Subscription;
+use post::subscriber::Subscription;
 use std::convert::TryInto;
 use std::error::Error as StdError;
 use tokio_util::codec;
@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn StdError>> {
         .get_matches();
 
     let base_url = matches.value_of("url").unwrap();
-    let mut client = pubsub::find_service::Client::from_url(base_url)?
+    let mut client = post::find_service::Client::from_url(base_url)?
         .connect()
         .await?;
     let desc = client
