@@ -13,6 +13,7 @@ use std::sync::{Arc, RwLock};
 use std::time;
 use time::SystemTime;
 use tonic::{Request, Response, Status};
+use time::Duration;
 
 fn convert_system_time_error(time_error: time::SystemTimeError) -> io::Error {
     io::Error::new(io::ErrorKind::Other, time_error)
@@ -23,14 +24,21 @@ type PublisherStore = Arc<RwLock<HashMap<String, proto::Registration>>>;
 #[derive(Default, Clone)]
 pub struct MeetupServer {
     publisher_store: PublisherStore,
-    publisher_timeout: time::Duration,
+    publisher_timeout: Duration,
+    publisher_scan_interval: Duration,
+}
+
+pub struct MeetupServerOptions {
+    pub publisher_timeout: Duration,
+    pub publisher_scan_interval: Duration,
 }
 
 impl MeetupServer {
-    pub fn new(timeout: time::Duration) -> MeetupServer {
+    pub fn new(options: MeetupServerOptions) -> MeetupServer {
         MeetupServer {
             publisher_store: Arc::new(RwLock::new(HashMap::new())),
-            publisher_timeout: timeout,
+            publisher_timeout: options.publisher_timeout,
+            publisher_scan_interval: options.publisher_scan_interval
         }
     }
 
@@ -40,9 +48,9 @@ impl MeetupServer {
 
     fn remove_expired_publishers(&self) {
         let pub_store = self.publisher_store.clone();
-        let pub_timeout = self.publisher_timeout;
+        let scan_interval = self.publisher_scan_interval;
 
-        let _tokio_task = tokio::spawn(tokio::time::interval(pub_timeout).for_each(move |_| {
+        let _tokio_task = tokio::spawn(tokio::time::interval(scan_interval).for_each(move |_| {
             let now = time::SystemTime::now();
             pub_store.write().unwrap().retain(|_k, v| {
                 if let Some(info) = &v.info {

@@ -8,8 +8,8 @@ use time::Duration;
 
 use post::find_service::proto::find_me_server::FindMeServer;
 
+use meetup_server::{MeetupServer, MeetupServerOptions};
 use tonic::transport::Server;
-use meetup_server::MeetupServer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -51,9 +51,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .parse()
             .unwrap(),
     );
+
+    let scan_interval = Duration::from_secs(
+        matches
+            .value_of("publisher-scan-interval")
+            .unwrap()
+            .parse()
+            .unwrap(),
+    );
     let bind_info = matches.value_of("bind").unwrap().parse().unwrap();
 
-    let meetup_server = MeetupServer::new(publisher_timeout);
+    let meetup_server_options = MeetupServerOptions {
+        publisher_timeout: publisher_timeout,
+        publisher_scan_interval: scan_interval,
+    };
+    let meetup_server = MeetupServer::new(meetup_server_options);
     meetup_server.start_remove_process();
 
     let server = Server::builder()
