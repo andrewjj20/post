@@ -2,7 +2,7 @@ extern crate tokio;
 use clap::{crate_authors, App as ClApp, Arg};
 use futures::{future, stream::StreamExt};
 use log::*;
-use pubsub::{
+use post::{
     find_service,
     find_service::{
         proto,
