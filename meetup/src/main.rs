@@ -106,7 +106,7 @@ impl FindMe for ProtectedState {
         let list = if let Some(val) = locked.publishers.get(&request.name_regex) {
             vec![val.clone()]
         } else {
-            unimplemented!()
+            vec![]
         };
 
         let reply = proto::SearchResponse { list };

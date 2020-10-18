@@ -14,7 +14,7 @@ use std::fmt;
 use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time;
-use tokio::{net::UdpSocket, time as timer};
+use tokio::{net::UdpSocket, time as timer, sync::oneshot::error::RecvError as OneshotRecvError};
 
 #[derive(Debug)]
 pub enum Error {
@@ -23,6 +23,7 @@ pub enum Error {
     IoError(io::Error),
     FramingError(framing::Error),
     TimerError(timer::Error),
+    OneshotError(OneshotRecvError),
 }
 
 type DataGram = (framing::Message, SocketAddr);
@@ -37,6 +38,7 @@ impl std::fmt::Display for Error {
             Error::FramingError(e) => write!(f, "Framing Error: {}", e),
             Error::AddrParseError => write!(f, "Error Parsing Address"),
             Error::TimerError(e) => write!(f, "Error in tokio timer: {}", e),
+            Error::OneshotError(e) => write!(f, "Error in internal messaging:{}", e),
         }
     }
 }
@@ -64,6 +66,12 @@ impl From<framing::Error> for Error {
 impl From<timer::Error> for Error {
     fn from(err: timer::Error) -> Error {
         Error::TimerError(err)
+    }
+}
+
+impl From<OneshotRecvError> for Error {
+    fn from(err: OneshotRecvError) -> Error {
+        Error::OneshotError(err)
     }
 }
 

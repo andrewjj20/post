@@ -139,13 +139,15 @@ where
     })
 }
 
-fn publisher_registration(
+async fn publisher_registration(
     desc: PublisherDesc,
     client: find_service::Client,
     shared: Arc<Mutex<PublisherShared>>,
-) {
+) ->Result<()> {
+    let (reg_sender, reg_listener) = tokio::sync::oneshot::channel::<bool>();
     let reg_info = Arc::new((client, desc));
     tokio::spawn(async move {
+        let mut reg_sender = Some(reg_sender);
         let interval = time::Duration::new(0, 0);
         let fold_reg_info = Arc::clone(&reg_info);
         timer::delay_for(interval).await;
@@ -157,13 +159,20 @@ fn publisher_registration(
                 .map_err(log_err)
                 .await;
             Some(match result {
-                Ok(resp) => ((), resp.expiration_interval / 2),
+                Ok(resp) => {
+                    if let Some(sender) = reg_sender.take() {
+                        //if the other side is not listening, we don't care
+                        let _ = sender.send(true);
+                    }
+                    ((), resp.expiration_interval / 2)},
                 Err(_) => ((), interval),
             })
         } else {
             None
         }
     });
+    reg_listener.await?;
+    Ok(())
 }
 
 /// Handles the distribution of messages to [Subscribers](super::subscriber::Subscription).
@@ -226,7 +235,7 @@ impl Publisher {
             error!("Sink Error {}", e);
         }));
 
-        publisher_registration(desc, client, Arc::clone(&shared));
+        publisher_registration(desc, client, Arc::clone(&shared)).await?;
 
         Ok(Self {
             shared,
@@ -239,7 +248,7 @@ impl Publisher {
     fn flush(&mut self, cx: &mut Context) -> Poll<Result<()>> {
         loop {
             if let Some(future) = self.in_poll.as_mut() {
-                futures::ready!(future.as_mut().poll(cx));
+                futures::ready!(future.as_mut().poll(cx))?;
                 self.in_poll.take();
             } else {
                 return Poll::Ready(Ok(()));
