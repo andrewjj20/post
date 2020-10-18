@@ -43,7 +43,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .get_matches();
 
-    matches.value_of("publisher-scan-interval").unwrap();
     let publisher_timeout = Duration::from_secs(
         matches
             .value_of("publisher-timeout")
