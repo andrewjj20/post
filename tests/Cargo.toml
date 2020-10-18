@@ -1,12 +1,15 @@
 [package]
 name = "tests"
-version = "0.0.0"
+version = "0.1.0-alpha.0"
 publish = false
 edition = "2018"
+description = "Integration tests for the Post library."
+license = "MIT"
+license-file = "LICENSE.txt"
 
 [dependencies]
-post = { version = "0.1.0", path = "../lib" }
-post-meetup = { version = "0.1.0", path = "../meetup" }
+post = { version = "0.1.0-alpha.0", path = "../lib" }
+post-meetup = { version = "0.1.0-alpha.0", path = "../meetup" }
 clap = "2.32"
 futures = "0.3"
 log = "0.4"

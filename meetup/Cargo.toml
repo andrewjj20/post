@@ -1,12 +1,16 @@
 [package]
 name = "post-meetup"
-version = "0.1.0"
-publish = false
-edition = "2018"
+version = "0.1.0-alpha.0"
+authors = ["Joshua Job <josh@joshjob.com>"]
+edition = '2018'
+description = "Meetup service for the Post library."
+license = "MIT"
+license-file = "LICENSE.txt"
+
 
 [dependencies]
 bytes = "0.5"
-post = { version = "0.1.0", path = "../lib" }
+post = { version = "0.1.0-alpha.0", path = "../lib" }
 clap = "2.33"
 env_logger = "0.7"
 eyre = "0.6"
