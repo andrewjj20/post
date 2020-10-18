@@ -3,7 +3,7 @@ extern crate log;
 #[macro_use]
 use crate::verify::{self, VerificationStatus, Verifier};
 use futures::{sink::SinkExt, stream::StreamExt, TryFutureExt};
-use std::{sync::Arc, convert::TryFrom};
+use std::{convert::TryFrom, sync::Arc};
 
 use crate::common;
 
@@ -49,16 +49,31 @@ async fn publisher_subscriber_basics() {
         .await
         .expect("Unable to create Publisher");
 
-    assert_ne!(client.server_status().await.expect("Unable to retreive status").count, 0);
+    assert_ne!(
+        client
+            .server_status()
+            .await
+            .expect("Unable to retreive status")
+            .count,
+        0
+    );
 
     debug!("Searching for publisher");
-    let found_publisher = client.get_descriptors_for_name(publisher_name).await
+    let found_publisher = client
+        .get_descriptors_for_name(publisher_name)
+        .await
         .expect("Error finding publisher")
-        .list.pop().expect("No publisher found");
+        .list
+        .pop()
+        .expect("No publisher found");
 
-    assert_eq!(found_publisher.info.is_some(),true);
+    assert_eq!(found_publisher.info.is_some(), true);
 
-    let found_publisher_desc = post::PublisherDesc::try_from(found_publisher.publisher.expect("Publisher did not contain a description"))
+    let found_publisher_desc = post::PublisherDesc::try_from(
+        found_publisher
+            .publisher
+            .expect("Publisher did not contain a description"),
+    )
     .expect("Unable to convert returned description");
 
     let mut subscriber = post::subscriber::Subscription::new(found_publisher_desc)

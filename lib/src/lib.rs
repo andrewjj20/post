@@ -14,7 +14,7 @@ use std::fmt;
 use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time;
-use tokio::{net::UdpSocket, time as timer, sync::oneshot::error::RecvError as OneshotRecvError};
+use tokio::{net::UdpSocket, sync::oneshot::error::RecvError as OneshotRecvError, time as timer};
 
 #[derive(Debug)]
 pub enum Error {

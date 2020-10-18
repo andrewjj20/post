@@ -143,7 +143,7 @@ async fn publisher_registration(
     desc: PublisherDesc,
     client: find_service::Client,
     shared: Arc<Mutex<PublisherShared>>,
-) ->Result<()> {
+) -> Result<()> {
     let (reg_sender, reg_listener) = tokio::sync::oneshot::channel::<bool>();
     let reg_info = Arc::new((client, desc));
     tokio::spawn(async move {
@@ -164,7 +164,8 @@ async fn publisher_registration(
                         //if the other side is not listening, we don't care
                         let _ = sender.send(true);
                     }
-                    ((), resp.expiration_interval / 2)},
+                    ((), resp.expiration_interval / 2)
+                }
                 Err(_) => ((), interval),
             })
         } else {
