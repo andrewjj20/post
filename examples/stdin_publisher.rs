@@ -5,7 +5,7 @@ use futures::{
     sink::SinkExt,
     stream::{StreamExt, TryStreamExt},
 };
-use post::{PublisherDesc, publisher::Publisher};
+use post::{publisher::Publisher, PublisherDesc};
 use std::error::Error as StdError;
 use std::time::Duration;
 use tokio_util::codec;
@@ -49,9 +49,7 @@ async fn main() -> Result<(), Box<dyn StdError>> {
         .get_matches();
 
     let url = String::from(matches.value_of("url").unwrap());
-    let client = post::find_service::Client::from_url(url)?
-        .connect()
-        .await?;
+    let client = post::find_service::Client::from_url(url)?.connect().await?;
     let name = "stdin".to_string();
     let host_name = matches.value_of("host").unwrap().to_string();
     let port = matches
@@ -69,7 +67,8 @@ async fn main() -> Result<(), Box<dyn StdError>> {
             name,
             host_name,
             port,
-            subscriber_expiration_interval: Duration::new(subscriber_timeout, 0),},
+            subscriber_expiration_interval: Duration::new(subscriber_timeout, 0),
+        },
         client,
     )
     .await?;
