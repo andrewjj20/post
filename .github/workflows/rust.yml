@@ -28,3 +28,5 @@ jobs:
       #run: cargo clippy
     - name: Run tests
       run: cargo test --verbose
+    - name: Rust Format
+      run: cargo fmt -- --check
