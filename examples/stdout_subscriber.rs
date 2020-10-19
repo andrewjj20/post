@@ -1,5 +1,3 @@
-#![feature(async_closure)]
-
 extern crate log;
 
 use clap::{crate_authors, crate_version, App as ClApp, Arg};

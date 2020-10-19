@@ -191,7 +191,7 @@ impl Subscription {
                                 let timeout = sub.timeout_interval / 2;
                                 let mut sink = self.sink.clone();
                                 let addr = self.addr;
-                                let resub = timer::delay_for(timeout).then(async move |_| {
+                                let resub = timer::delay_for(timeout).then(move |_| async move {
                                     debug!("Sending Resubscription");
                                     match sink
                                         .send((

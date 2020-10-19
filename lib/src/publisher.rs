@@ -210,12 +210,14 @@ impl Publisher {
             let backend_sink = sink.clone();
             tokio::spawn(
                 stop_stream_when_inactive(
-                    udp_stream.filter_map(async move |r| match r {
-                        Err(e) => {
-                            error!("Stream Error {}", e);
-                            None
+                    udp_stream.filter_map(move |r| async {
+                        match r {
+                            Err(e) => {
+                                error!("Stream Error {}", e);
+                                None
+                            }
+                            Ok(ret) => Some(ret),
                         }
-                        Ok(ret) => Some(ret),
                     }),
                     Arc::clone(&shared),
                 )
