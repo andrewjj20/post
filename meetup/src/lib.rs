@@ -11,9 +11,9 @@ use std::io;
 use std::result::Result;
 use std::sync::{Arc, RwLock};
 use std::time;
+use time::Duration;
 use time::SystemTime;
 use tonic::{Request, Response, Status};
-use time::Duration;
 
 fn convert_system_time_error(time_error: time::SystemTimeError) -> io::Error {
     io::Error::new(io::ErrorKind::Other, time_error)
@@ -38,7 +38,7 @@ impl MeetupServer {
         MeetupServer {
             publisher_store: Arc::new(RwLock::new(HashMap::new())),
             publisher_timeout: options.publisher_timeout,
-            publisher_scan_interval: options.publisher_scan_interval
+            publisher_scan_interval: options.publisher_scan_interval,
         }
     }
 

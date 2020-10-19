@@ -9,7 +9,7 @@ name = "meetup_server"
 path = "src/lib.rs"
 
 [[bin]]
-name = "meetup"
+name = "post-meetup"
 path = "src/main.rs"
 
 [dependencies]
