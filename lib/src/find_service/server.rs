@@ -1,10 +1,6 @@
-extern crate tokio;
+use super::{proto, proto::find_me_server::FindMe, MissingFieldError};
 use futures::{future, stream::StreamExt};
 use log::*;
-use post::{
-    find_service,
-    find_service::{proto, proto::find_me_server::FindMe},
-};
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::io;
@@ -108,7 +104,7 @@ impl FindMe for MeetupServer {
                     Some(desc)
                 }
                 None => {
-                    return Err(find_service::MissingFieldError::new("Registration", "desc")
+                    return Err(MissingFieldError::new("Registration", "desc")
                         .try_into()
                         .unwrap())
                 }

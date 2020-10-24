@@ -25,3 +25,8 @@ hyper = "^0.13.4"
 
 [build-dependencies]
 tonic-build = "^0.3"
+
+[[bin]]
+name = "post-meetup"
+path = "src/bin/post_meetup.rs"
+
