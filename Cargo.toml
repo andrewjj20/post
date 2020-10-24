@@ -3,6 +3,5 @@
 members = [
   "lib",
   "meetup",
-  "examples",
   "tests",
 ]
