@@ -21,9 +21,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .subcommand(SubCommand::with_name("publishers").about("Displays a list of publishers"))
         .get_matches();
 
-    let base_url = matches
-        .value_of("url")
-        .ok_or_else(|| eyre::Report::msg("No URL provided"))?;
+    let base_url = matches.value_of("url").unwrap();
     let mut client = find_service::Client::from_url(base_url)?.connect().await?;
 
     info!("Starting Request");

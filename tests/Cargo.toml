@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 post = { version = "0.1.0", path = "../lib" }
-post-meetup = { version = "0.1.0", path = "../meetup" }
 clap = "2.32"
 futures = "0.3"
 log = "0.4"

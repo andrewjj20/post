@@ -1,5 +1,6 @@
 /// The find service protobuf back end. Use this when writing a Meetup service.
 pub mod proto;
+pub mod server;
 
 use super::PublisherDesc;
 use convert::{TryFrom, TryInto};

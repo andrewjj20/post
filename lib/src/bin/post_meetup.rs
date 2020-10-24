@@ -6,9 +6,10 @@ use std::result::Result;
 use std::time;
 use time::Duration;
 
-use post::find_service::proto::find_me_server::FindMeServer;
-
-use meetup_server::{MeetupServer, MeetupServerOptions};
+use post::find_service::{
+    proto::find_me_server::FindMeServer,
+    server::{MeetupServer, MeetupServerOptions},
+};
 use tonic::transport::Server;
 
 #[tokio::main]
