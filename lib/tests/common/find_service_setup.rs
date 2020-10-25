@@ -20,12 +20,12 @@ pub async fn retry_client(url: &'static str) -> post::find_service::Client {
             .connect()
             .await
         {
-            info!("client works, checking status");
+            log::info!("client works, checking status");
             if client.server_status().await.is_ok() {
                 break client;
             }
         }
-        info!("Client retry");
+        log::info!("Client retry");
         tokio::time::delay_for(tokio::time::Duration::from_millis(500)).await;
         retry += 1;
     }
@@ -33,7 +33,7 @@ pub async fn retry_client(url: &'static str) -> post::find_service::Client {
 
 impl FindService {
     pub async fn new() -> FindService {
-        info!("Starting new meetup service");
+        log::info!("Starting new meetup service");
         let path = "../target/debug/post-meetup";
         let url = "http://127.0.0.1:8080/";
         let bind = "127.0.0.1:8080";
@@ -45,9 +45,8 @@ impl FindService {
             .spawn()
             .expect("Failed to start meetup");
 
-        info!("meetup service started");
+        log::info!("meetup service started");
         //tokio::runtime::Handle::current().block_on(tokio::time::delay_for(std::time::Duration::from_secs(1)));
-        //info!("meetup service started");
 
         let client = retry_client(url).await;
 

@@ -1,6 +1,7 @@
 /// tools that should be independent of any test and can be shared
 /// The tokio runtime is an example.
 mod find_service_setup;
+pub mod verify;
 
 use find_service_setup::FindService;
 
