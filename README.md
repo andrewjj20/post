@@ -23,8 +23,8 @@ This project is licensed under the [MIT license].
 
 ## Examples
 
- * [Publisher](https://github.com/andrewjj20/post/blob/master/lib/examples/stdin_publisher.rs)
- * [Subscriber](https://github.com/andrewjj20/post/blob/master/lib/examples/stdout_subscriber.rs)
+ * [Publisher](https://github.com/andrewjj20/post/blob/master/examples/stdin_publisher.rs)
+ * [Subscriber](https://github.com/andrewjj20/post/blob/master/examples/stdout_subscriber.rs)
 
 ### Running exmples
  * Start the meetup server. This provides a central location for publishers and subscribers to find each other. A Subscriber can connect to a Publisher without it.
