@@ -2,6 +2,10 @@
 
 A Publish Subscribe library allowing multiple hosts to register, and subscribe services accross an IP network.
 
+![Crates.io](https://img.shields.io/crates/v/post)
+![GitHub Workflow Status (branch)](https://img.shields.io/github/workflow/status/andrewjj20/post/Rust/master)
+![Crates.io](https://img.shields.io/crates/l/post)
+
 Goals:
 
 * Offload tasks to the network where possible.
