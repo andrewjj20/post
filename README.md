@@ -10,10 +10,7 @@ Goals:
 
 ## Supported Rust Version
 
-Nightly rust is required. Last tested on:
-```
-rustc 1.48.0-nightly (043f6d747 2020-09-25)
-```
+Tested with the latest stable as of the commit date of the latest commit.
 
 ## License
 

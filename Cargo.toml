@@ -1,8 +1,9 @@
 [package]
 name = "post"
-version = "0.1.0"
+version = "0.0.0"
 authors = ["Joshua Job <josh@joshjob.com>"]
 edition = '2018'
+license = "MIT"
 
 [dependencies]
 log = "0.4"
