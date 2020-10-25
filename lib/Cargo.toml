@@ -14,7 +14,7 @@ serde_derive = "1.0"
 serde_bytes = "0.10"
 clap = "2.32"
 byteorder = "1"
-tokio = { version = "0.2", features = ["macros", "stream", "time", "rt-core","sync"] }
+tokio = { version = "0.2", features = ["macros", "stream", "time", "rt-core","sync","io-std"] }
 tokio-util = { version = "0.3", features = ["udp","codec"] }
 tonic = "^0.3"
 prost = "0.6"
@@ -22,6 +22,10 @@ bytes = "0.5"
 rmp-serde = "0.13"
 itertools = "0.8"
 hyper = "^0.13.4"
+pin-project = "^0.4"
+
+[dev-dependencies]
+tokio = { version = "0.2", features = ["macros", "stream", "time", "rt-core","sync","io-std","process"] }
 
 [build-dependencies]
 tonic-build = "^0.3"

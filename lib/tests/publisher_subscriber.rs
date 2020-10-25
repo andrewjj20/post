@@ -1,11 +1,10 @@
 extern crate log;
 
-#[macro_use]
-use crate::verify::{self, VerificationStatus, Verifier};
+pub mod common;
+
+use common::verify::{self, VerificationStatus, Verifier};
 use futures::{sink::SinkExt, stream::StreamExt, TryFutureExt};
 use std::{convert::TryFrom, sync::Arc};
-
-use crate::common;
 
 type GeneralError = Box<dyn std::error::Error>;
 
@@ -44,7 +43,7 @@ async fn publisher_subscriber_basics() {
     let send_verifier = verifier.clone();
     let receive_verifier = verifier.clone();
 
-    debug!("Creating publisher");
+    log::debug!("Creating publisher");
     let mut publisher = post::publisher::Publisher::from_description(desc.clone(), client.clone())
         .await
         .expect("Unable to create Publisher");
@@ -58,7 +57,7 @@ async fn publisher_subscriber_basics() {
         0
     );
 
-    debug!("Searching for publisher");
+    log::debug!("Searching for publisher");
     let found_publisher = client
         .get_descriptors_for_name(publisher_name)
         .await
@@ -81,16 +80,16 @@ async fn publisher_subscriber_basics() {
         .expect("Unable to create Subscription");
 
     println!("yeeters");
-    debug!("publisher and subscriber initialized");
+    log::debug!("publisher and subscriber initialized");
 
     subscriber.wait_for_subscription_complete().await;
 
-    debug!("Subscription active");
+    log::debug!("Subscription active");
 
     let receive_one = tokio::spawn(async {
         let verified = verify::VerifiedStream::new(subscriber, receive_verifier);
         let message = verified.into_future().await.0;
-        debug!("Received");
+        log::debug!("Received");
         match message {
             Some(m) => match m {
                 VerificationStatus::Verified => Ok(()),
@@ -110,14 +109,14 @@ async fn publisher_subscriber_basics() {
     let send_one = async {
         let message = send_verifier.create_message();
         let ret = publisher.send(message).await;
-        debug!("sent");
+        log::debug!("sent");
         ret
     }
     .map_err(GeneralError::from);
 
     let (send_result, receive_result) = futures::future::join(send_one, receive_one).await;
 
-    debug!("done");
+    log::debug!("done");
 
     if send_result.is_err() || receive_result.is_err() {
         panic!(
