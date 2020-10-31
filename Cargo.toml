@@ -1,5 +1,6 @@
 [package]
 name = "post"
+description="A Publish Subscribe library allowing multiple hosts to register, and subscribe services accross an IP network."
 version = "0.0.0"
 authors = ["Joshua Job <josh@joshjob.com>"]
 edition = '2018'
