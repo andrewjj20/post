@@ -79,7 +79,6 @@ async fn publisher_subscriber_basics() {
         .await
         .expect("Unable to create Subscription");
 
-    println!("yeeters");
     log::debug!("publisher and subscriber initialized");
 
     subscriber.wait_for_subscription_complete().await;
@@ -131,6 +130,69 @@ async fn publisher_subscriber_basics() {
             }
         );
     }
+
+    common::teardown();
+}
+
+#[tokio::test]
+///Send a message, see if it was received.
+async fn publisher_cleanup() {
+    let test_env = common::setup().await;
+
+    let mut client = test_env.find.client();
+    let publisher_name = "basic".to_string();
+    client
+        .server_status()
+        .await
+        .expect("Service status should not return error");
+
+    let desc = post::PublisherDesc {
+        name: publisher_name.clone(),
+        host_name: "127.0.0.1".to_string(),
+        port: 5000,
+        subscriber_expiration_interval: std::time::Duration::from_secs(2),
+    };
+
+    log::debug!("Creating publisher");
+    let mut _publisher = post::publisher::Publisher::from_description(desc.clone(), client.clone())
+        .await
+        .expect("Unable to create Publisher");
+
+    log::debug!("Searching for publisher");
+    let found_publisher = client
+        .get_descriptors_for_name(publisher_name.clone())
+        .await
+        .expect("Error finding publisher")
+        .list
+        .pop()
+        .expect("No publisher found");
+
+    assert_eq!(found_publisher.info.is_some(), true);
+
+    let found_publisher_desc = post::PublisherDesc::try_from(
+        found_publisher
+            .publisher
+            .expect("Publisher did not contain a description"),
+    )
+    .expect("Unable to convert returned description");
+
+    let mut subscriber = post::subscriber::Subscription::new(found_publisher_desc)
+        .await
+        .expect("Unable to create Subscription");
+
+    log::debug!("publisher and subscriber initialized");
+
+    subscriber.wait_for_subscription_complete().await;
+
+    tokio::time::delay_for(std::time::Duration::from_secs(10)).await;
+
+    let publishers_list = client
+        .get_descriptors_for_name(publisher_name)
+        .await
+        .expect("Error retrieving publishers")
+        .list;
+
+    assert_eq!(publishers_list.len(), 0);
 
     common::teardown();
 }

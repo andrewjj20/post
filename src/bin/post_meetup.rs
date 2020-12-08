@@ -91,25 +91,23 @@ fn remove_expired_publishers(publisher_store: VecPublisherStore, i: time::Durati
         let publishers_to_remove: Vec<String> = publishers
             .into_iter()
             .filter(|publisher_tuple| {
-                let filter_out;
+                let mut filter_out = true;
                 if let Some(pub_info) = &publisher_tuple.1.info {
                     if let Some(expiration) = &pub_info.expiration {
                         match expiration.try_into() {
                             Result::<time::SystemTime, _>::Ok(proto_time) => {
-                                filter_out = proto_time > now
+                                filter_out = proto_time < now;
+                                debug!("checking time proto_time: {:?}, now: {:?}, should filter out: {:?}", proto_time, now, filter_out);
                             }
                             Err(error) => {
                                 error!("Removing descriptor, Invalid time: {}", error);
-                                filter_out = true;
                             }
                         };
                     } else {
                         error!("Removing descriptor, No Expiration");
-                        filter_out = true;
                     }
                 } else {
                     error!("Removing descriptor, No ConnectionInfo");
-                    filter_out = true;
                 }
                 filter_out
             })

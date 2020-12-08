@@ -39,6 +39,10 @@ impl FindService {
         let bind = "127.0.0.1:8080";
 
         let _proc = tokio::process::Command::new(path)
+            .arg("-s")
+            .arg("5")
+            .arg("-t")
+            .arg("5")
             .arg("--bind")
             .arg(bind)
             .kill_on_drop(true)

@@ -10,7 +10,7 @@ pub struct CommonTestEnvironment {
 }
 
 pub async fn setup() -> CommonTestEnvironment {
-    env_logger::init();
+    let _ = env_logger::try_init();
     eprintln!("path:{:?}", std::env::current_dir().unwrap());
 
     let find = FindService::new().await;
