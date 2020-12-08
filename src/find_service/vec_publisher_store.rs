@@ -58,7 +58,7 @@ impl PublisherStore for VecPublisherStore {
         let locked_map = self.publishers_map.read().unwrap();
         let mut new_vec = vec![];
         for pair in locked_map.clone() {
-            if (*pair.0).eq(search_str) {
+            if (*pair.0).contains(search_str) {
                 new_vec.push(pair);
             }
         }
