@@ -22,12 +22,16 @@ impl fmt::Display for PublisherNotFoundError {
 }
 
 pub trait PublisherStore: Send + Sync + Clone + 'static {
-    fn insert_publisher(&self, publisher_name: &String, registration: proto::Registration);
-    fn remove_publisher(&self, publisher_name: &String) -> Result<(), PublisherNotFoundError>;
-    fn remove_publishers(&self, publisher_names: &Vec<String>);
-    fn find_publisher(&self, publisher_name: &String) -> Option<proto::Registration>;
+    fn insert_publisher(&self, publisher_name: &str, registration: proto::Registration);
+    fn remove_publisher(&self, publisher_name: &str) -> Result<(), PublisherNotFoundError>;
+    fn remove_publishers(&self, publisher_names: &[String]) {
+        for publisher in publisher_names {
+            let _ = self.remove_publisher(publisher);
+        }
+    }
+    fn find_publisher(&self, publisher_name: &str) -> Option<proto::Registration>;
     fn get_publishers(&self) -> Vec<(String, proto::Registration)>;
-    fn find_publishers(&self, search_str: &String) -> Vec<(String, proto::Registration)>;
+    fn find_publishers(&self, search_str: &str) -> Vec<(String, proto::Registration)>;
 }
 
 #[derive(Default, Clone)]

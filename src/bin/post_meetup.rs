@@ -9,9 +9,9 @@ use std::{convert::TryInto, net::ToSocketAddrs};
 use time::Duration;
 
 use post::find_service::{
+    hash_map_publisher_store::HashMapPublisherStore,
     proto::find_me_server::FindMeServer,
     server::{MeetupServer, MeetupServerOptions, PublisherStore},
-    vec_publisher_store::VecPublisherStore,
 };
 use tonic::transport::Server;
 
@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let bind_info = matches.value_of("bind").unwrap().parse().unwrap();
 
-    let publisher_store = VecPublisherStore::new();
+    let publisher_store = HashMapPublisherStore::new();
     let meetup_server_options = MeetupServerOptions {
         publisher_timeout: publisher_timeout,
         publisher_store: publisher_store.clone(),
@@ -83,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn remove_expired_publishers(publisher_store: VecPublisherStore, i: time::Duration) {
+fn remove_expired_publishers(publisher_store: HashMapPublisherStore, i: time::Duration) {
     tokio::spawn(tokio::time::interval(i).for_each(move |_| {
         let now = time::SystemTime::now();
         let publishers = publisher_store.get_publishers();
