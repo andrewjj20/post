@@ -1,3 +1,4 @@
+pub mod hash_map_publisher_store;
 /// The find service protobuf back end. Use this when writing a Meetup service.
 pub mod proto;
 pub mod server;

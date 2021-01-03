@@ -35,13 +35,13 @@ struct Subscriber {
 ///
 /// This is used by the [Publisher] and separate future managing background
 /// [Subscription](super::subscriber::Subscription) management.
-struct PublisherShared {
+struct PublisherInternalState {
     subscribers: HashMap<SocketAddr, Subscriber>,
     is_active: bool,
     subscriber_expiration_interval: time::Duration,
 }
 
-impl PublisherShared {
+impl PublisherInternalState {
     fn new(is_active: bool, subscriber_expiration_interval: time::Duration) -> Self {
         Self {
             subscribers: HashMap::new(),
@@ -88,11 +88,11 @@ impl PublisherShared {
 }
 
 /// The final type of PublishShared to ensure it is protected.
-type ProtectedShared = Arc<Mutex<PublisherShared>>;
+type ProtectedShared = Arc<Mutex<PublisherInternalState>>;
 
 /// Handle the background management of a Publisher.
 async fn handle_publisher_backend(
-    shared: Arc<Mutex<PublisherShared>>,
+    shared: Arc<Mutex<PublisherInternalState>>,
     incomming: DataGram,
 ) -> Option<DataGram> {
     debug!("Message received: {}", incomming.0);
@@ -142,7 +142,7 @@ where
 async fn publisher_registration(
     desc: PublisherDesc,
     client: find_service::Client,
-    shared: Arc<Mutex<PublisherShared>>,
+    shared_state: Arc<Mutex<PublisherInternalState>>,
 ) -> Result<()> {
     let (reg_sender, reg_listener) = tokio::sync::oneshot::channel::<bool>();
     let reg_info = Arc::new((client, desc));
@@ -151,7 +151,7 @@ async fn publisher_registration(
         let interval = time::Duration::new(0, 0);
         let fold_reg_info = Arc::clone(&reg_info);
         timer::delay_for(interval).await;
-        if shared.lock().await.is_active {
+        if shared_state.lock().await.is_active {
             let (client, desc) = &*Arc::clone(&fold_reg_info);
             let result = client
                 .clone()
@@ -197,7 +197,7 @@ impl Publisher {
         client: find_service::Client,
     ) -> Result<Self> {
         let subscriber_expiration_interval = desc.subscriber_expiration_interval;
-        let shared = Arc::new(Mutex::new(PublisherShared::new(
+        let shared = Arc::new(Mutex::new(PublisherInternalState::new(
             true,
             subscriber_expiration_interval,
         )));
@@ -221,11 +221,11 @@ impl Publisher {
                     }),
                     Arc::clone(&shared),
                 )
-                .for_each(move |incomming| {
+                .for_each(move |incoming| {
                     let shared = reserved_shared.clone();
                     let mut sink = backend_sink.clone();
                     async move {
-                        if let Some(msg) = handle_publisher_backend(shared, incomming).await {
+                        if let Some(msg) = handle_publisher_backend(shared, incoming).await {
                             if sink.send(msg).await.is_err() {
                                 error!("Broken pipe when processing output");
                             }
@@ -274,21 +274,20 @@ where
     type Error = Error;
 
     fn start_send(self: Pin<&mut Self>, mut item: Buf) -> Result<()> {
-        let pin = self.get_mut();
+        let publisher = self.get_mut();
 
         let timestamp = time::SystemTime::now();
-        let generation = pin.generation;
-        let shared = pin.shared.clone();
-        let mut sink = pin.sink.clone();
+        let generation = publisher.generation;
+        let shared_publisher = publisher.shared.clone();
+        let mut sink = publisher.sink.clone();
         let msgs = Message::split_data_msgs(item.to_bytes(), generation)?;
-        pin.in_poll.replace(Box::pin(async move {
+        publisher.in_poll.replace(Box::pin(async move {
             let dgrams = {
-                let mut shared = shared.lock().await;
-                shared.prune_stale_subscriptions(timestamp);
-                Vec::from_iter(
-                    msgs.into_iter()
-                        .cartesian_product(shared.subscribers.values().map(|s| s.addr)),
-                )
+                let mut locked_shared_publisher = shared_publisher.lock().await;
+                locked_shared_publisher.prune_stale_subscriptions(timestamp);
+                Vec::from_iter(msgs.into_iter().cartesian_product(
+                    locked_shared_publisher.subscribers.values().map(|s| s.addr),
+                ))
             };
             for dgram in dgrams {
                 sink.send(dgram).await.map_err(|_| {
@@ -297,7 +296,7 @@ where
             }
             Ok(())
         }));
-        pin.generation += 1;
+        publisher.generation += 1;
 
         Ok(())
     }

@@ -1,14 +1,17 @@
 extern crate tokio;
 use clap::{crate_authors, App as ClApp, Arg};
+use futures::future;
+use futures::StreamExt;
 use log::*;
-use std::net::ToSocketAddrs;
-use std::result::Result;
 use std::time;
+use std::{collections::HashMap, result::Result, sync::RwLock};
+use std::{convert::TryInto, net::ToSocketAddrs};
 use time::Duration;
 
 use post::find_service::{
+    hash_map_publisher_store::HashMapPublisherStore,
     proto::find_me_server::FindMeServer,
-    server::{MeetupServer, MeetupServerOptions},
+    server::{MeetupServer, MeetupServerOptions, PublisherStore},
 };
 use tonic::transport::Server;
 
@@ -61,21 +64,60 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let bind_info = matches.value_of("bind").unwrap().parse().unwrap();
 
+    let publisher_store = HashMapPublisherStore::new(RwLock::new(HashMap::new()));
     let meetup_server_options = MeetupServerOptions {
         publisher_timeout: publisher_timeout,
-        publisher_scan_interval: scan_interval,
+        publisher_store: publisher_store.clone(),
     };
+
     let meetup_server = MeetupServer::new(meetup_server_options);
-    meetup_server.start_remove_process();
 
     let server = Server::builder()
         .add_service(FindMeServer::new(meetup_server))
         .serve(bind_info);
 
     info!("Started server {}", bind_info);
+    remove_expired_publishers(publisher_store, scan_interval);
     server.await?;
 
     Ok(())
+}
+
+fn remove_expired_publishers(publisher_store: HashMapPublisherStore, i: time::Duration) {
+    tokio::spawn(tokio::time::interval(i).for_each(move |_| {
+        let now = time::SystemTime::now();
+        let publishers = publisher_store.get_publishers();
+
+        let publishers_to_remove: Vec<String> = publishers
+            .into_iter()
+            .filter(|publisher_tuple| {
+                let mut filter_out = true;
+                if let Some(pub_info) = &publisher_tuple.1.info {
+                    if let Some(expiration) = &pub_info.expiration {
+                        match expiration.try_into() {
+                            Result::<time::SystemTime, _>::Ok(proto_time) => {
+                                filter_out = proto_time < now;
+                                debug!("checking time proto_time: {:?}, now: {:?}, should filter out: {:?}", proto_time, now, filter_out);
+                            }
+                            Err(error) => {
+                                error!("Removing descriptor, Invalid time: {}", error);
+                            }
+                        };
+                    } else {
+                        error!("Removing descriptor, No Expiration");
+                    }
+                } else {
+                    error!("Removing descriptor, No ConnectionInfo");
+                }
+                filter_out
+            })
+            .map(|publisher_tuple| publisher_tuple.0)
+            .collect();
+
+        publisher_store.remove_publishers(&publishers_to_remove);
+
+        future::ready(())
+    }));
 }
 
 pub fn socket_validator(v: String) -> Result<(), String> {
