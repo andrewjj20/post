@@ -3,23 +3,17 @@ use super::server::{PublisherNotFoundError, PublisherStore};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-type PublisherStoreMap = Arc<RwLock<HashMap<String, proto::Registration>>>;
-
-#[derive(Clone)]
-pub struct HashMapPublisherStore {
-    publishers_map: PublisherStoreMap,
-}
+pub type HashMapPublisherStore = Arc<RwLock<HashMap<String, proto::Registration>>>;
 
 impl PublisherStore for HashMapPublisherStore {
     fn insert_publisher(&self, publisher_name: &str, registration: proto::Registration) {
-        self.publishers_map
-            .write()
+        self.write()
             .unwrap()
             .insert(publisher_name.to_string(), registration);
     }
 
     fn remove_publisher(&self, publisher_name: &str) -> Result<(), PublisherNotFoundError> {
-        let mut locked_publishers = self.publishers_map.write().unwrap();
+        let mut locked_publishers = self.write().unwrap();
         let has_key = locked_publishers.contains_key(publisher_name);
 
         if !has_key {
@@ -31,7 +25,7 @@ impl PublisherStore for HashMapPublisherStore {
     }
 
     fn get_publishers(&self) -> Vec<(String, proto::Registration)> {
-        let locked_publishers = self.publishers_map.write().unwrap();
+        let locked_publishers = self.write().unwrap();
         let mut publisher_pairs = vec![];
         for publisher_name_pair in locked_publishers.clone() {
             publisher_pairs.push(publisher_name_pair);
@@ -41,14 +35,14 @@ impl PublisherStore for HashMapPublisherStore {
     }
 
     fn find_publisher(&self, publisher_name: &str) -> Option<proto::Registration> {
-        let locked_map = self.publishers_map.read().unwrap();
+        let locked_map = self.read().unwrap();
         let registration = locked_map.get(publisher_name).unwrap().clone();
 
         Some(registration)
     }
 
     fn find_publishers(&self, search_str: &str) -> Vec<(String, proto::Registration)> {
-        let locked_map = self.publishers_map.read().unwrap();
+        let locked_map = self.read().unwrap();
         let mut new_vec = vec![];
         for pair in locked_map.clone() {
             if (*pair.0).contains(search_str) {
@@ -60,17 +54,9 @@ impl PublisherStore for HashMapPublisherStore {
     }
 }
 
-impl HashMapPublisherStore {
-    pub fn new() -> HashMapPublisherStore {
-        HashMapPublisherStore {
-            publishers_map: Arc::new(RwLock::new(HashMap::new())),
-        }
-    }
-}
-
 #[test]
 fn get_all_test() {
-    let vec_store = HashMapPublisherStore::new();
+    let vec_store = HashMapPublisherStore::new(RwLock::new(HashMap::new()));
     let empty_registration = proto::Registration {
         publisher: None,
         info: None,
@@ -85,7 +71,7 @@ fn get_all_test() {
 
 #[test]
 fn get_single_by_name_test() {
-    let vec_store = HashMapPublisherStore::new();
+    let vec_store = HashMapPublisherStore::new(RwLock::new(HashMap::new()));
     let empty_registration = proto::Registration {
         publisher: None,
         info: None,
@@ -100,7 +86,7 @@ fn get_single_by_name_test() {
 
 #[test]
 fn remove_single_publisher_by_name_test() {
-    let vec_store = HashMapPublisherStore::new();
+    let vec_store = HashMapPublisherStore::new(RwLock::new(HashMap::new()));
     let empty_registration = proto::Registration {
         publisher: None,
         info: None,
@@ -124,7 +110,7 @@ fn remove_single_publisher_by_name_test() {
 
 #[test]
 fn remove_multiple_publishers_by_name_test() {
-    let vec_store = HashMapPublisherStore::new();
+    let vec_store = HashMapPublisherStore::new(RwLock::new(HashMap::new()));
     let empty_registration = proto::Registration {
         publisher: None,
         info: None,

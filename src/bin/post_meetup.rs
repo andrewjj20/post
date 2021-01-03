@@ -3,8 +3,8 @@ use clap::{crate_authors, App as ClApp, Arg};
 use futures::future;
 use futures::StreamExt;
 use log::*;
-use std::result::Result;
 use std::time;
+use std::{collections::HashMap, result::Result, sync::RwLock};
 use std::{convert::TryInto, net::ToSocketAddrs};
 use time::Duration;
 
@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let bind_info = matches.value_of("bind").unwrap().parse().unwrap();
 
-    let publisher_store = HashMapPublisherStore::new();
+    let publisher_store = HashMapPublisherStore::new(RwLock::new(HashMap::new()));
     let meetup_server_options = MeetupServerOptions {
         publisher_timeout: publisher_timeout,
         publisher_store: publisher_store.clone(),

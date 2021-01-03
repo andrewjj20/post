@@ -154,7 +154,7 @@ async fn publisher_cleanup() {
     };
 
     log::debug!("Creating publisher");
-    let mut _publisher = post::publisher::Publisher::from_description(desc.clone(), client.clone())
+    let _publisher = post::publisher::Publisher::from_description(desc.clone(), client.clone())
         .await
         .expect("Unable to create Publisher");
 
