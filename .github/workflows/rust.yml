@@ -27,7 +27,7 @@ jobs:
     - name: Run Clippy against main lib
       run: cargo clippy --workspace --exclude tests
     - name: Run tests
-      run: cargo test --verbose -- --test-threads=1
+      run: cargo test --verbose --
       env:
           RUST_LOG: info
     - name: Rust Format

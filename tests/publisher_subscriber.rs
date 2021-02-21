@@ -149,7 +149,7 @@ async fn publisher_cleanup() {
     let desc = post::PublisherDesc {
         name: publisher_name.clone(),
         host_name: "127.0.0.1".to_string(),
-        port: 5000,
+        port: 5001,
         subscriber_expiration_interval: std::time::Duration::from_secs(2),
     };
 
